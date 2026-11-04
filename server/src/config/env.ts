@@ -7,8 +7,8 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(3001),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   
-  DATABASE_URL: z.string().default('postgresql://codesync:codesync_dev@localhost:5432/codesync'),
-  REDIS_URL: z.string().default('redis://localhost:6379'),
+  DATABASE_URL: z.string().transform(url => url.replace(/^["']|["']$/g, '').replace(/&channel_binding=require/g, '')).default('postgresql://codesync:codesync_dev@localhost:5432/codesync'),
+  REDIS_URL: z.string().transform(url => url.replace(/^["']|["']$/g, '')).default('redis://localhost:6379'),
   
   JWT_ACCESS_SECRET: z.string().default('dev_access_secret_change_in_production_32chars!'),
   JWT_REFRESH_SECRET: z.string().default('dev_refresh_secret_change_in_production_32chars!'),

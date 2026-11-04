@@ -44,12 +44,12 @@ export const errorHandler = (err: Error, req: Request, res: Response, next: Next
 
   // Fallback for unhandled errors
   const statusCode = 500;
-  const message = 'Internal Server Error';
+  const message = err.message || 'Internal Server Error';
   
   res.status(statusCode).json({
     status: 'error',
-    code: 'INTERNAL_SERVER_ERROR',
-    message: env.NODE_ENV === 'production' ? message : err.message,
+    code: (err as any).code || 'INTERNAL_SERVER_ERROR',
+    message,
     ...(env.NODE_ENV === 'development' && { stack: err.stack }),
   });
 };
