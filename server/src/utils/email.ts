@@ -14,6 +14,11 @@ const transporter = nodemailer.createTransport({
 export const sendVerificationEmail = async (email: string, token: string) => {
   const verificationUrl = `${env.FRONTEND_URL}/auth/verify?token=${token}`;
   
+  if (!env.SMTP_USER || !env.SMTP_PASS || env.SMTP_HOST.includes('ethereal')) {
+    console.log(`[Email Mock] Verification email for ${email}. URL: ${verificationUrl}`);
+    return;
+  }
+
   try {
     const info = await transporter.sendMail({
       from: env.EMAIL_FROM,
@@ -38,6 +43,11 @@ export const sendVerificationEmail = async (email: string, token: string) => {
 export const sendPasswordResetEmail = async (email: string, token: string) => {
   const resetUrl = `${env.FRONTEND_URL}/auth/reset-password?token=${token}`;
   
+  if (!env.SMTP_USER || !env.SMTP_PASS || env.SMTP_HOST.includes('ethereal')) {
+    console.log(`[Email Mock] Password reset email for ${email}. URL: ${resetUrl}`);
+    return;
+  }
+
   try {
     const info = await transporter.sendMail({
       from: env.EMAIL_FROM,
@@ -71,6 +81,11 @@ export const sendProjectInvitationEmail = async (
   const targetUrl = isNewUser
     ? `${env.FRONTEND_URL}/auth/register?email=${encodeURIComponent(email)}`
     : `${env.FRONTEND_URL}/projects/${projectId}`;
+
+  if (!env.SMTP_USER || !env.SMTP_PASS || env.SMTP_HOST.includes('ethereal')) {
+    console.log(`[Email Mock] Project invitation for ${email}. URL: ${targetUrl}`);
+    return;
+  }
 
   try {
     const info = await transporter.sendMail({
