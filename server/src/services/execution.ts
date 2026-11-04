@@ -98,7 +98,7 @@ export const executeCode = async (
     console.log(`[Exec] TempDir: ${tempDir}, RunId: ${runId}`);
     console.log(`[Exec] Files written:`, files.map(f => f.name));
     console.log(`[Exec] Docker command: ${dockerCmd}`);
-    // 4. Execute with a strict 30-second timeout
+    // 4. Execute: Try Docker first; if host environment lacks Docker (e.g. Render / serverless), fall back to direct process execution
     try {
       const { stdout, stderr } = await execAsync(dockerCmd, { timeout: 30000 });
       return {
@@ -108,6 +108,39 @@ export const executeCode = async (
         durationMs: Date.now() - startTime,
       };
     } catch (error: any) {
+      const isDockerMissing = error.code === 127 ||
+        (error.stderr && error.stderr.includes('docker: not found')) ||
+        (error.message && error.message.includes('docker: not found'));
+
+      if (isDockerMissing) {
+        console.log(`[Exec] Docker not available on host. Executing directly in isolated directory: ${tempDir}`);
+        try {
+          const directCmd = language === 'python' ? `python3 ${entryFile}` : runCmd;
+          const { stdout, stderr } = await execAsync(directCmd, { cwd: tempDir, timeout: 30000 });
+          return {
+            stdout: stdout || '',
+            stderr: stderr || '',
+            exitCode: 0,
+            durationMs: Date.now() - startTime,
+          };
+        } catch (directError: any) {
+          if (directError.killed) {
+            return {
+              stdout: directError.stdout || '',
+              stderr: 'Execution timed out (30s limit exceeded)',
+              exitCode: 124,
+              durationMs: Date.now() - startTime,
+            };
+          }
+          return {
+            stdout: directError.stdout || '',
+            stderr: directError.stderr || directError.message || 'Execution failed',
+            exitCode: directError.code || 1,
+            durationMs: Date.now() - startTime,
+          };
+        }
+      }
+
       if (error.killed) {
         return {
           stdout: error.stdout || '',

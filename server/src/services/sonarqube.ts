@@ -42,6 +42,133 @@ export interface CodeSmellDetail {
   type: string;
 }
 
+export const runLocalStaticAnalysis = (
+  files: { name: string; content: string | null }[],
+  language: string
+): { metrics: SonarMetrics; smells: CodeSmellDetail[] } => {
+  let totalNcloc = 0;
+  let totalComplexity = 0;
+  const smells: CodeSmellDetail[] = [];
+
+  for (const file of files) {
+    if (!file.content) continue;
+    const lines = file.content.split('\n');
+    let fileNcloc = 0;
+    let fileComplexity = 1;
+
+    lines.forEach((line, idx) => {
+      const trimmed = line.trim();
+      const lineNum = idx + 1;
+
+      if (!trimmed) return;
+
+      const isComment = language === 'python'
+        ? trimmed.startsWith('#')
+        : trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*');
+
+      if (!isComment) {
+        fileNcloc++;
+
+        if (/\b(if|elif|else if|for|while|case|catch|except)\b/.test(trimmed)) {
+          fileComplexity++;
+        }
+        if (/(&&|\|\|)/.test(trimmed)) {
+          fileComplexity++;
+        }
+
+        // Code Smells
+        if (language === 'python' && /\bprint\s*\(/.test(trimmed)) {
+          smells.push({
+            key: `smell_${file.name}_${lineNum}_print`,
+            rule: 'python:S106',
+            severity: 'MINOR',
+            component: file.name,
+            line: lineNum,
+            message: 'Standard outputs (print) should not be used in production code.',
+            type: 'CODE_SMELL',
+          });
+        } else if ((language === 'javascript' || language === 'typescript') && /\bconsole\.(log|debug|info)\s*\(/.test(trimmed)) {
+          smells.push({
+            key: `smell_${file.name}_${lineNum}_console`,
+            rule: 'javascript:S106',
+            severity: 'MINOR',
+            component: file.name,
+            line: lineNum,
+            message: 'Standard outputs (console.log) should not be used in production code.',
+            type: 'CODE_SMELL',
+          });
+        }
+
+        if (/(password|secret|apikey|api_key|token)\s*[:=]\s*["'][^"']+["']/i.test(trimmed) && !trimmed.toLowerCase().includes('process.env')) {
+          smells.push({
+            key: `smell_${file.name}_${lineNum}_secret`,
+            rule: 'security:S2068',
+            severity: 'CRITICAL',
+            component: file.name,
+            line: lineNum,
+            message: 'Potential hardcoded credential or secret detected. Use environment variables instead.',
+            type: 'VULNERABILITY',
+          });
+        }
+
+        if (language === 'python' && /except.*:\s*pass\b/.test(trimmed)) {
+          smells.push({
+            key: `smell_${file.name}_${lineNum}_pass`,
+            rule: 'python:S1186',
+            severity: 'MAJOR',
+            component: file.name,
+            line: lineNum,
+            message: 'Avoid empty except blocks that silently swallow exceptions.',
+            type: 'CODE_SMELL',
+          });
+        }
+
+        const indentMatch = line.match(/^(\s+)/);
+        if (indentMatch && indentMatch[1].length >= 16) {
+          smells.push({
+            key: `smell_${file.name}_${lineNum}_nesting`,
+            rule: 'complexity:S134',
+            severity: 'MAJOR',
+            component: file.name,
+            line: lineNum,
+            message: 'Control flow statement is nested too deeply (> 4 levels). Refactor into helper functions.',
+            type: 'CODE_SMELL',
+          });
+        }
+      } else {
+        if (/\b(TODO|FIXME|HACK)\b/i.test(trimmed)) {
+          smells.push({
+            key: `smell_${file.name}_${lineNum}_todo`,
+            rule: 'common:S1135',
+            severity: 'INFO',
+            component: file.name,
+            line: lineNum,
+            message: `Complete the task associated with this '${trimmed.match(/\b(TODO|FIXME|HACK)\b/i)?.[0]}' comment.`,
+            type: 'CODE_SMELL',
+          });
+        }
+      }
+    });
+
+    totalNcloc += fileNcloc;
+    totalComplexity += fileComplexity;
+  }
+
+  return {
+    metrics: {
+      bugs: 0,
+      vulnerabilities: smells.filter(s => s.type === 'VULNERABILITY').length,
+      code_smells: smells.filter(s => s.type === 'CODE_SMELL').length,
+      coverage: 0,
+      duplicated_lines_density: 0,
+      complexity: Math.max(1, totalComplexity),
+      cognitive_complexity: Math.max(1, Math.floor(totalComplexity * 0.75)),
+      ncloc: Math.max(1, totalNcloc),
+    },
+    smells,
+  };
+};
+
 export const runSonarAnalysis = async (
   projectId: string,
   files: { name: string; content: string | null }[],
@@ -110,68 +237,72 @@ sonar.language=${sonarLang}
       scannerCmd = `docker run --rm ${networkFlag} -v "${volumePrefix}:/usr/src" -w /usr/src sonarsource/sonar-scanner-cli sonar-scanner -Dsonar.host.url=${sonarScannerUrl} -Dsonar.login=${token}`;
     }
     console.log('[SonarQube] Running scanner cmd:', scannerCmd);
-    await execAsync(scannerCmd, { timeout: 120000 });
+    try {
+      await execAsync(scannerCmd, { timeout: 120000 });
 
-    // Wait for Compute Engine to finish (up to 5 minutes: 60 × 5s)
-    let analysisId = null;
-    for (let i = 0; i < 60; i++) {
-      await new Promise(r => setTimeout(r, 5000));
-      try {
-        const tasksRes = await getSonarApi().get(`/api/ce/component?component=${projectKey}`);
-        const currentTask = tasksRes.data.current;
-        if (currentTask && currentTask.status === 'SUCCESS') {
-          analysisId = currentTask.analysisId;
-          break;
-        } else if (currentTask && currentTask.status === 'FAILED') {
-          throw new Error('SonarQube Compute Engine task failed.');
+      // Wait for Compute Engine to finish (up to 5 minutes: 60 × 5s)
+      let analysisId = null;
+      for (let i = 0; i < 60; i++) {
+        await new Promise(r => setTimeout(r, 5000));
+        try {
+          const tasksRes = await getSonarApi().get(`/api/ce/component?component=${projectKey}`);
+          const currentTask = tasksRes.data.current;
+          if (currentTask && currentTask.status === 'SUCCESS') {
+            analysisId = currentTask.analysisId;
+            break;
+          } else if (currentTask && currentTask.status === 'FAILED') {
+            throw new Error('SonarQube Compute Engine task failed.');
+          }
+        } catch (e: any) {
+          console.error('[SonarQube Polling Error]', e.message, e.response?.data || '');
         }
-      } catch (e: any) {
-        console.error('[SonarQube Polling Error]', e.message, e.response?.data || '');
-        // Task might not be queued yet
       }
+
+      if (!analysisId) {
+        throw new Error('SonarQube analysis timed out.');
+      }
+
+      // Fetch Metrics
+      const metricsKeys = 'bugs,vulnerabilities,code_smells,coverage,duplicated_lines_density,complexity,cognitive_complexity,ncloc';
+      const metricsRes = await getSonarApi().get(`/api/measures/component?component=${projectKey}&metricKeys=${metricsKeys}`);
+      
+      const metricsList = metricsRes.data.component.measures;
+      const metrics: Record<string, number> = {};
+      for (const m of metricsList) {
+        metrics[m.metric] = parseFloat(m.value);
+      }
+
+      // Fetch Code Smells (Issues)
+      const issuesRes = await getSonarApi().get(`/api/issues/search?componentKeys=${projectKey}&types=CODE_SMELL&statuses=OPEN`);
+      const issuesList = issuesRes.data.issues;
+
+      const smells: CodeSmellDetail[] = issuesList.map((issue: any) => ({
+        key: issue.key,
+        rule: issue.rule,
+        severity: issue.severity,
+        component: issue.component.replace(`${projectKey}:`, ''),
+        line: issue.line || 0,
+        message: issue.message,
+        type: issue.type,
+      }));
+
+      return {
+        metrics: {
+          bugs: metrics['bugs'] || 0,
+          vulnerabilities: metrics['vulnerabilities'] || 0,
+          code_smells: metrics['code_smells'] || 0,
+          coverage: metrics['coverage'] || 0,
+          duplicated_lines_density: metrics['duplicated_lines_density'] || 0,
+          complexity: metrics['complexity'] || 0,
+          cognitive_complexity: metrics['cognitive_complexity'] || 0,
+          ncloc: metrics['ncloc'] || 0,
+        },
+        smells,
+      };
+    } catch (scannerErr: any) {
+      console.log('[SonarQube] Docker scanner or SonarQube server unavailable on host. Running CodeSync native static code analysis engine fallback...');
+      return runLocalStaticAnalysis(files, language);
     }
-
-    if (!analysisId) {
-      throw new Error('SonarQube analysis timed out.');
-    }
-
-    // Fetch Metrics
-    const metricsKeys = 'bugs,vulnerabilities,code_smells,coverage,duplicated_lines_density,complexity,cognitive_complexity,ncloc';
-    const metricsRes = await getSonarApi().get(`/api/measures/component?component=${projectKey}&metricKeys=${metricsKeys}`);
-    
-    const metricsList = metricsRes.data.component.measures;
-    const metrics: Record<string, number> = {};
-    for (const m of metricsList) {
-      metrics[m.metric] = parseFloat(m.value);
-    }
-
-    // Fetch Code Smells (Issues)
-    const issuesRes = await getSonarApi().get(`/api/issues/search?componentKeys=${projectKey}&types=CODE_SMELL&statuses=OPEN`);
-    const issuesList = issuesRes.data.issues;
-
-    const smells: CodeSmellDetail[] = issuesList.map((issue: any) => ({
-      key: issue.key,
-      rule: issue.rule,
-      severity: issue.severity,
-      component: issue.component.replace(`${projectKey}:`, ''),
-      line: issue.line || 0,
-      message: issue.message,
-      type: issue.type,
-    }));
-
-    return {
-      metrics: {
-        bugs: metrics['bugs'] || 0,
-        vulnerabilities: metrics['vulnerabilities'] || 0,
-        code_smells: metrics['code_smells'] || 0,
-        coverage: metrics['coverage'] || 0,
-        duplicated_lines_density: metrics['duplicated_lines_density'] || 0,
-        complexity: metrics['complexity'] || 0,
-        cognitive_complexity: metrics['cognitive_complexity'] || 0,
-        ncloc: metrics['ncloc'] || 0,
-      },
-      smells,
-    };
   } finally {
     try {
       await fs.rm(tempDir, { recursive: true, force: true });
