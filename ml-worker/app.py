@@ -13,12 +13,21 @@ models = {}
 
 @app.on_event("startup")
 def load_models():
-    try:
-        models['hgb'] = joblib.load(os.path.join(MODELS_DIR, "model_hgb.joblib"))
-        models['rf'] = joblib.load(os.path.join(MODELS_DIR, "model_rf.joblib"))
-        models['lr'] = joblib.load(os.path.join(MODELS_DIR, "model_lr.joblib"))
+    # Load each model independently so that a failure in one (e.g. large LFS model in constrained environments)
+    # does not prevent the primary production model (HGB) from serving predictions.
+    for name in ['hgb', 'lr', 'rf']:
+        model_path = os.path.join(MODELS_DIR, f"model_{name}.joblib")
+        if os.path.exists(model_path):
+            try:
+                models[name] = joblib.load(model_path)
+                print(f"[ML Worker] Loaded model: {name}")
+            except Exception as e:
+                print(f"[ML Worker] Could not load model '{name}': {e}")
+        else:
+            print(f"[ML Worker] Model file not found: {model_path}")
 
-        # Load metadata from JSON
+    # Load metadata and feature schema
+    try:
         meta_path = os.path.join(MODELS_DIR, "metadata.json")
         bounds_path = os.path.join(MODELS_DIR, "feature_bounds.json")
 
@@ -28,14 +37,12 @@ def load_models():
         with open(bounds_path, 'r') as f:
             bounds = json.load(f)
 
-        # Extract feature names from metadata (ordered list is canonical)
         feature_names = meta.get('feature_schema', {}).get('ordered_names', list(bounds.keys()))
         models['meta'] = {'features': feature_names, 'info': meta}
 
-        print(f"Models loaded successfully. Features: {len(feature_names)}")
+        print(f"[ML Worker] Models initialized successfully. Available: {[k for k in models.keys() if k != 'meta']}")
     except Exception as e:
-        print(f"Error loading models: {e}")
-        # Not exiting so the API can still return helpful 503s via /health
+        print(f"[ML Worker] Error loading metadata/schema: {e}")
 
 @app.get("/health")
 def health_check():

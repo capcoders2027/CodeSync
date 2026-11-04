@@ -1,0 +1,46 @@
+services:
+  # ─── 1. Backend API & WebSockets Server ──────────────────────────────
+  - type: web
+    name: codesync-server
+    runtime: node
+    rootDir: server
+    plan: free
+    region: oregon
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: node dist/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_EXPIRY
+        value: 7d
+      - key: JWT_REFRESH_EXPIRY
+        value: 30d
+      - key: BCRYPT_ROUNDS
+        value: 12
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: FRONTEND_URL
+        value: "*"
+      - key: ML_WORKER_URL
+        fromService:
+          type: web
+          name: codesync-ml
+          property: host
+
+  # ─── 2. ML Worker (FastAPI Python Defect-Risk Predictor) ─────────────
+  - type: web
+    name: codesync-ml
+    runtime: python
+    rootDir: ml-worker
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
