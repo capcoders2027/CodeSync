@@ -1,0 +1,4 @@
+model,mean_smell_delta
+LR,0.003061
+RF,0.005259
+HGB,0.010628

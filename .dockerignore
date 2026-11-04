@@ -1,0 +1,11 @@
+node_modules
+server/node_modules
+client/node_modules
+client/.next
+server/dist
+ml-worker/venv
+ml-worker/__pycache__
+.git
+*.log
+Paper_Final
+Prompts

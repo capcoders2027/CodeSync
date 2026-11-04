@@ -1,0 +1,5 @@
+BUILD VERIFICATION: PASS
+Three clean pdflatex passes completed with -halt-on-error. No LaTeX errors, fatal errors, undefined citations, or undefined references detected in the final pass.
+Pages:           9
+Page size:       612 x 792 pts (letter)
+File size:       633941 bytes

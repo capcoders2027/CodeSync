@@ -1,0 +1,64 @@
+{
+  "version": "v1.0.0",
+  "created_at": "2026-10-02T17:31:16.866767Z",
+  "training_dataset": "td_v2_augmented",
+  "training_split": "chronological_70_30",
+  "training_seed": 42,
+  "training_language": "java",
+  "n_training_samples": 47162,
+  "n_test_samples": 20213,
+  "positive_prevalence_train": 0.16059539459734531,
+  "classifiers": {
+    "HGB": {
+      "pr_auc": 0.4159
+    },
+    "RF": {
+      "pr_auc": 0.3964
+    },
+    "LR": {
+      "pr_auc": 0.348
+    }
+  },
+  "feature_schema": {
+    "ordered_names": [
+      "COMPLEXITY",
+      "FILE_COMPLEXITY",
+      "CLASS_COMPLEXITY",
+      "FUNCTION_COMPLEXITY",
+      "COGNITIVE_COMPLEXITY",
+      "COVERAGE",
+      "LINE_COVERAGE",
+      "DUPLICATED_LINES",
+      "DUPLICATED_BLOCKS",
+      "DUPLICATED_FILES",
+      "DUPLICATED_LINES_DENSITY",
+      "CLASSES",
+      "FILES",
+      "DIRECTORIES",
+      "FUNCTIONS",
+      "STATEMENTS",
+      "COMMENT_LINES",
+      "COMMENT_LINES_DENSITY",
+      "LINES",
+      "NCLOC",
+      "AFFERENT_COUPLINGS",
+      "EFFERENT_COUPLINGS",
+      "NUMBER_OF_CLASSES_AND_INTERFACES",
+      "PREVIOUS_COMMITS",
+      "COMMITS_LAST_30_DAYS",
+      "COMMITS_LAST_90_DAYS",
+      "LOG1P_LINES_ADDED",
+      "LOG1P_LINES_REMOVED",
+      "LOG1P_LINES_CHANGED",
+      "LOG1P_FILES_CHANGED",
+      "ACTIVE_SMELLS",
+      "ACTIVE_SMELL_RULES",
+      "ACTIVE_SMELL_COMPONENTS",
+      "BLOCKER_SHARE",
+      "CRITICAL_SHARE",
+      "MAJOR_SHARE",
+      "MINOR_SHARE"
+    ],
+    "total_features": 37
+  }
+}

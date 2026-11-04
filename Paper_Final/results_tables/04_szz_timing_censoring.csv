@@ -1,0 +1,13 @@
+measure,value
+SZZ_links,52428
+negative_lag_links,67
+mean_lag_days,1273.840467
+median_lag_days,931.828061
+p90_lag_days,2944.908697
+p95_lag_days,3599.908907
+median_candidate_followup_days,4861.010509
+initial_candidates,67375
+initial_positives,9635
+final_modeling_rows,66531
+final_positives,9295
+final_negatives,57236

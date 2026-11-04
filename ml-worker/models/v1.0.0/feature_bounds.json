@@ -1,0 +1,150 @@
+{
+  "COMPLEXITY": {
+    "p1": 166.0,
+    "p99": 43254.0
+  },
+  "FILE_COMPLEXITY": {
+    "p1": 9.0,
+    "p99": 34.975
+  },
+  "CLASS_COMPLEXITY": {
+    "p1": 8.0,
+    "p99": 29.9
+  },
+  "FUNCTION_COMPLEXITY": {
+    "p1": 1.4,
+    "p99": 3.7
+  },
+  "COGNITIVE_COMPLEXITY": {
+    "p1": 140.0,
+    "p99": 39975.5
+  },
+  "COVERAGE": {
+    "p1": 0.0,
+    "p99": 0.0
+  },
+  "LINE_COVERAGE": {
+    "p1": 0.0,
+    "p99": 0.0
+  },
+  "DUPLICATED_LINES": {
+    "p1": 150.0,
+    "p99": 125831.0
+  },
+  "DUPLICATED_BLOCKS": {
+    "p1": 6.0,
+    "p99": 4916.0
+  },
+  "DUPLICATED_FILES": {
+    "p1": 2.0,
+    "p99": 698.0
+  },
+  "DUPLICATED_LINES_DENSITY": {
+    "p1": 1.2,
+    "p99": 75.4
+  },
+  "CLASSES": {
+    "p1": 16.0,
+    "p99": 3137.0
+  },
+  "FILES": {
+    "p1": 12.0,
+    "p99": 4594.0
+  },
+  "DIRECTORIES": {
+    "p1": 2.0,
+    "p99": 1226.0
+  },
+  "FUNCTIONS": {
+    "p1": 95.0,
+    "p99": 21181.0
+  },
+  "STATEMENTS": {
+    "p1": 532.0,
+    "p99": 103537.25
+  },
+  "COMMENT_LINES": {
+    "p1": 327.0,
+    "p99": 86968.0
+  },
+  "COMMENT_LINES_DENSITY": {
+    "p1": 10.7,
+    "p99": 47.17300000000032
+  },
+  "LINES": {
+    "p1": 2008.0,
+    "p99": 638149.9500000001
+  },
+  "NCLOC": {
+    "p1": 1042.0,
+    "p99": 399429.3100000002
+  },
+  "AFFERENT_COUPLINGS": {
+    "p1": 0.0,
+    "p99": 0.0
+  },
+  "EFFERENT_COUPLINGS": {
+    "p1": 0.0,
+    "p99": 0.0
+  },
+  "NUMBER_OF_CLASSES_AND_INTERFACES": {
+    "p1": 0.0,
+    "p99": 0.0
+  },
+  "PREVIOUS_COMMITS": {
+    "p1": 19.0,
+    "p99": 19646.78
+  },
+  "COMMITS_LAST_30_DAYS": {
+    "p1": 0.0,
+    "p99": 824.0
+  },
+  "COMMITS_LAST_90_DAYS": {
+    "p1": 3.0,
+    "p99": 2144.0
+  },
+  "LOG1P_LINES_ADDED": {
+    "p1": 0.0,
+    "p99": 7.95624499110673
+  },
+  "LOG1P_LINES_REMOVED": {
+    "p1": 0.0,
+    "p99": 7.44943580784755
+  },
+  "LOG1P_LINES_CHANGED": {
+    "p1": 0.0,
+    "p99": 8.48866818957647
+  },
+  "LOG1P_FILES_CHANGED": {
+    "p1": 0.0,
+    "p99": 4.394449154672439
+  },
+  "ACTIVE_SMELLS": {
+    "p1": 28.0,
+    "p99": 32776.0
+  },
+  "ACTIVE_SMELL_RULES": {
+    "p1": 10.0,
+    "p99": 165.0
+  },
+  "ACTIVE_SMELL_COMPONENTS": {
+    "p1": 3.0,
+    "p99": 3337.0
+  },
+  "BLOCKER_SHARE": {
+    "p1": 0.0,
+    "p99": 0.103155800904508
+  },
+  "CRITICAL_SHARE": {
+    "p1": 0.0,
+    "p99": 0.2374898742200495
+  },
+  "MAJOR_SHARE": {
+    "p1": 0.1416587967335148,
+    "p99": 0.6935483870967742
+  },
+  "MINOR_SHARE": {
+    "p1": 0.15384615384615385,
+    "p99": 0.7438570364854803
+  }
+}

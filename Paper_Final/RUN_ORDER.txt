@@ -1,0 +1,11 @@
+FINAL PROJECT PACKAGE - RUN ORDER
+
+1. The final paper is in paper_source/.
+2. Figures are in figures/.
+3. Final result tables are in results_tables/.
+4. Validated experiment/audit scripts are in code/validated/.
+5. The research guide and cleanup documentation are in docs/.
+6. The final PDF was independently compiled from conference_101719.tex with three clean pdflatex passes and -halt-on-error.
+7. Do not regenerate or alter frozen final results merely for demonstration.
+
+Important: The original large source database and any obsolete/failed experiment branch are intentionally not included in this distribution package. The research guide says to keep the original database locally and not casually distribute a huge database copy, and to keep obsolete outputs archived rather than mixing them with the final branch.

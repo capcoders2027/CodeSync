@@ -1,0 +1,431 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// Users
+// ============================================================================
+
+model User {
+  id                 String    @id @default(uuid()) @db.Uuid
+  email              String    @unique @db.VarChar(255)
+  passwordHash       String    @map("password_hash") @db.VarChar(255)
+  displayName        String    @map("display_name") @db.VarChar(100)
+  avatarUrl          String?   @map("avatar_url") @db.VarChar(500)
+  emailVerified      Boolean   @default(false) @map("email_verified")
+  verificationToken  String?   @map("verification_token") @db.VarChar(255)
+  resetToken         String?   @map("reset_token") @db.VarChar(255)
+  resetTokenExpires  DateTime? @map("reset_token_expires") @db.Timestamptz
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  lastLoginAt        DateTime? @map("last_login_at") @db.Timestamptz
+
+  // Relations
+  ownedProjects    Project[]       @relation("ProjectOwner")
+  memberships      ProjectMember[] @relation("MemberUser")
+  invitedMembers   ProjectMember[] @relation("InvitedBy")
+  createdVersions  Version[]
+  triggeredAnalyses Analysis[]
+  comments         Comment[]
+  executionLogs    ExecutionLog[]
+  activityLogs     ActivityLog[]
+
+  @@map("users")
+}
+
+// ============================================================================
+// Projects
+// ============================================================================
+
+model Project {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(200)
+  description String?  @db.Text
+  language    String   @db.VarChar(20) // python, java, javascript, typescript
+  ownerId     String   @map("owner_id") @db.Uuid
+  isArchived  Boolean  @default(false) @map("is_archived")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  owner         User            @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members       ProjectMember[]
+  files         File[]
+  versions      Version[]
+  analyses      Analysis[]
+  comments      Comment[]
+  executionLogs ExecutionLog[]
+  activityLogs  ActivityLog[]
+  githubImports GithubImport[]
+  runConfig     RunConfiguration?
+
+  @@index([ownerId], name: "idx_projects_owner")
+  @@index([isArchived], name: "idx_projects_archived")
+  @@map("projects")
+}
+
+// ============================================================================
+// Project Members
+// ============================================================================
+
+model ProjectMember {
+  id               String   @id @default(uuid()) @db.Uuid
+  projectId        String   @map("project_id") @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  role             String   @default("member") @db.VarChar(20) // team_lead, member
+  permissions      Json     @default("{}") @db.JsonB
+  invitedById      String?  @map("invited_by") @db.Uuid
+  invitationStatus String   @default("pending") @map("invitation_status") @db.VarChar(20) // pending, accepted, rejected
+  joinedAt         DateTime? @map("joined_at") @db.Timestamptz
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User    @relation("MemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy User?   @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, userId], name: "idx_pm_project_user")
+  @@index([userId], name: "idx_pm_user")
+  @@map("project_members")
+}
+
+// ============================================================================
+// Files (Live working state)
+// ============================================================================
+
+model File {
+  id        String   @id @default(uuid()) @db.Uuid
+  projectId String   @map("project_id") @db.Uuid
+  parentId  String?  @map("parent_id") @db.Uuid
+  name      String   @db.VarChar(255)
+  type      String   @db.VarChar(10) // file, folder
+  content   String?  @db.Text
+  yjsState  Bytes?   @map("yjs_state")
+  sizeBytes Int      @default(0) @map("size_bytes")
+  mimeType  String?  @map("mime_type") @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent   File?     @relation("FileTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children File[]    @relation("FileTree")
+  comments Comment[]
+
+  @@unique([projectId, parentId, name], name: "idx_files_project_parent_name")
+  @@index([projectId], name: "idx_files_project")
+  @@index([parentId], name: "idx_files_parent")
+  @@map("files")
+}
+
+// ============================================================================
+// Versions (Immutable snapshots)
+// ============================================================================
+
+model Version {
+  id            String   @id @default(uuid()) @db.Uuid
+  projectId     String   @map("project_id") @db.Uuid
+  versionNumber Int      @map("version_number")
+  name          String   @db.VarChar(200)
+  message       String?  @db.Text
+  createdById   String   @map("created_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy   User               @relation(fields: [createdById], references: [id])
+  files       VersionFile[]
+  changeStats VersionChangeStats?
+  analyses    Analysis[]
+  previousVersionOf VersionChangeStats[] @relation("PreviousVersion")
+
+  @@unique([projectId, versionNumber], name: "idx_versions_project_number")
+  @@index([projectId], name: "idx_versions_project")
+  @@index([projectId, createdAt], name: "idx_versions_created_at")
+  @@map("versions")
+}
+
+model VersionFile {
+  id        String @id @default(uuid()) @db.Uuid
+  versionId String @map("version_id") @db.Uuid
+  filePath  String @map("file_path") @db.VarChar(1000)
+  content   String @db.Text
+  sizeBytes Int    @map("size_bytes")
+
+  // Relations
+  version Version @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@unique([versionId, filePath], name: "idx_vf_version_path")
+  @@index([versionId], name: "idx_vf_version")
+  @@map("version_files")
+}
+
+model VersionChangeStats {
+  id                String  @id @default(uuid()) @db.Uuid
+  versionId         String  @unique @map("version_id") @db.Uuid
+  previousVersionId String? @map("previous_version_id") @db.Uuid
+  linesAdded        Int     @default(0) @map("lines_added")
+  linesRemoved      Int     @default(0) @map("lines_removed")
+  linesChanged      Int     @default(0) @map("lines_changed")
+  filesChanged      Int     @default(0) @map("files_changed")
+  log1pLinesAdded   Float   @default(0) @map("log1p_lines_added")
+  log1pLinesRemoved Float   @default(0) @map("log1p_lines_removed")
+  log1pLinesChanged Float   @default(0) @map("log1p_lines_changed")
+  log1pFilesChanged Float   @default(0) @map("log1p_files_changed")
+
+  // Relations
+  version         Version  @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  previousVersion Version? @relation("PreviousVersion", fields: [previousVersionId], references: [id], onDelete: SetNull)
+
+  @@map("version_change_stats")
+}
+
+// ============================================================================
+// Analyses
+// ============================================================================
+
+model Analysis {
+  id             String    @id @default(uuid()) @db.Uuid
+  projectId      String    @map("project_id") @db.Uuid
+  versionId      String    @map("version_id") @db.Uuid
+  triggeredById  String    @map("triggered_by") @db.Uuid
+  modelVersionId String?   @map("model_version_id") @db.Uuid
+  status         String    @default("queued") @db.VarChar(30)
+  stage          String?   @db.VarChar(30)
+  errorMessage   String?   @map("error_message") @db.Text
+  startedAt      DateTime? @map("started_at") @db.Timestamptz
+  completedAt    DateTime? @map("completed_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  project      Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  version      Version             @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  triggeredBy  User                @relation(fields: [triggeredById], references: [id])
+  modelVersion ModelVersion?       @relation(fields: [modelVersionId], references: [id], onDelete: Restrict)
+  metrics      AnalysisMetrics?
+  smells       AnalysisSmell[]
+  prediction   AnalysisPrediction?
+
+  @@index([projectId], name: "idx_analyses_project")
+  @@index([versionId], name: "idx_analyses_version")
+  @@index([status], name: "idx_analyses_status")
+  @@index([projectId, createdAt(sort: Desc)], name: "idx_analyses_project_created")
+  @@map("analyses")
+}
+
+model AnalysisMetrics {
+  id                          String @id @default(uuid()) @db.Uuid
+  analysisId                  String @unique @map("analysis_id") @db.Uuid
+  complexity                  Float? @db.DoublePrecision
+  fileComplexity              Float? @map("file_complexity") @db.DoublePrecision
+  classComplexity             Float? @map("class_complexity") @db.DoublePrecision
+  functionComplexity          Float? @map("function_complexity") @db.DoublePrecision
+  cognitiveComplexity         Float? @map("cognitive_complexity") @db.DoublePrecision
+  coverage                    Float? @db.DoublePrecision
+  lineCoverage                Float? @map("line_coverage") @db.DoublePrecision
+  duplicatedLines             Float? @map("duplicated_lines") @db.DoublePrecision
+  duplicatedBlocks            Float? @map("duplicated_blocks") @db.DoublePrecision
+  duplicatedFiles             Float? @map("duplicated_files") @db.DoublePrecision
+  duplicatedLinesDensity      Float? @map("duplicated_lines_density") @db.DoublePrecision
+  classes                     Float? @db.DoublePrecision
+  files                       Float? @db.DoublePrecision
+  directories                 Float? @db.DoublePrecision
+  functions                   Float? @db.DoublePrecision
+  statements                  Float? @db.DoublePrecision
+  commentLines                Float? @map("comment_lines") @db.DoublePrecision
+  commentLinesDensity         Float? @map("comment_lines_density") @db.DoublePrecision
+  lines                       Float? @db.DoublePrecision
+  ncloc                       Float? @db.DoublePrecision
+  afferentCouplings           Float? @map("afferent_couplings") @db.DoublePrecision
+  efferentCouplings           Float? @map("efferent_couplings") @db.DoublePrecision
+  numberOfClassesAndInterfaces Float? @map("number_of_classes_and_interfaces") @db.DoublePrecision
+
+  // Relations
+  analysis Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  @@map("analysis_metrics")
+}
+
+model AnalysisSmell {
+  id         String  @id @default(uuid()) @db.Uuid
+  analysisId String  @map("analysis_id") @db.Uuid
+  ruleKey    String  @map("rule_key") @db.VarChar(200)
+  ruleName   String? @map("rule_name") @db.VarChar(500)
+  severity   String  @db.VarChar(20) // BLOCKER, CRITICAL, MAJOR, MINOR, INFO
+  component  String? @db.VarChar(500)
+  line       Int?
+  message    String? @db.Text
+
+  // Relations
+  analysis Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  @@index([analysisId], name: "idx_smells_analysis")
+  @@index([analysisId, severity], name: "idx_smells_severity")
+  @@map("analysis_smells")
+}
+
+model AnalysisPrediction {
+  id                   String @id @default(uuid()) @db.Uuid
+  analysisId           String @unique @map("analysis_id") @db.Uuid
+  riskScore            Float  @map("risk_score") @db.DoublePrecision
+  riskLevel            String @map("risk_level") @db.VarChar(20) // low, medium, high
+  classifierUsed       String @map("classifier_used") @db.VarChar(20) // LR, RF, HGB
+  featureVector        Json   @map("feature_vector") @db.JsonB
+  featureContributions Json?  @map("feature_contributions") @db.JsonB
+  disclaimer           String @db.Text
+
+  // Relations
+  analysis Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  @@map("analysis_predictions")
+}
+
+model ModelVersion {
+  id               String   @id @default(uuid()) @db.Uuid
+  versionTag       String   @unique @map("version_tag") @db.VarChar(50)
+  classifierType   String   @map("classifier_type") @db.VarChar(20)
+  artifactPath     String   @map("artifact_path") @db.VarChar(500)
+  trainingDataset  String   @map("training_dataset") @db.VarChar(200)
+  featureNames     Json     @map("feature_names") @db.JsonB
+  trainingMetadata Json?    @map("training_metadata") @db.JsonB
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  analyses Analysis[]
+
+  @@index([isActive], name: "idx_mv_active")
+  @@map("model_versions")
+}
+
+// ============================================================================
+// Comments
+// ============================================================================
+
+model Comment {
+  id              String   @id @default(uuid()) @db.Uuid
+  projectId       String   @map("project_id") @db.Uuid
+  fileId          String   @map("file_id") @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  parentCommentId String?  @map("parent_comment_id") @db.Uuid
+  lineNumber      Int?     @map("line_number")
+  content         String   @db.Text
+  isResolved      Boolean  @default(false) @map("is_resolved")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  file          File      @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [userId], references: [id])
+  parentComment Comment?  @relation("CommentThread", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies       Comment[] @relation("CommentThread")
+
+  @@index([fileId, lineNumber], name: "idx_comments_file")
+  @@index([projectId], name: "idx_comments_project")
+  @@index([parentCommentId], name: "idx_comments_parent")
+  @@map("comments")
+}
+
+// ============================================================================
+// Activity Log
+// ============================================================================
+
+model ActivityLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  projectId  String   @map("project_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  action     String   @db.VarChar(50)
+  entityType String?  @map("entity_type") @db.VarChar(50)
+  entityId   String?  @map("entity_id") @db.Uuid
+  metadata   Json?    @db.JsonB
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([projectId, createdAt(sort: Desc)], name: "idx_activity_project")
+  @@index([userId], name: "idx_activity_user")
+  @@map("activity_log")
+}
+
+// ============================================================================
+// Execution Logs
+// ============================================================================
+
+model ExecutionLog {
+  id            String    @id @default(uuid()) @db.Uuid
+  projectId     String    @map("project_id") @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  language      String    @db.VarChar(20)
+  entryFile     String    @map("entry_file") @db.VarChar(500)
+  status        String    @db.VarChar(20) // running, completed, timeout, error, killed
+  exitCode      Int?      @map("exit_code")
+  stdoutPreview String?   @map("stdout_preview") @db.Text
+  stderrPreview String?   @map("stderr_preview") @db.Text
+  durationMs    Int?      @map("duration_ms")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([projectId, createdAt(sort: Desc)], name: "idx_exec_project")
+  @@map("execution_logs")
+}
+
+// ============================================================================
+// Run Configuration (Project-level execution config)
+// ============================================================================
+
+model RunConfiguration {
+  id              String   @id @default(uuid()) @db.Uuid
+  projectId       String   @unique @map("project_id") @db.Uuid
+  projectType     String   @map("project_type") @db.VarChar(30) // python, nodejs, java, custom
+  entryCommand    String   @map("entry_command") @db.VarChar(500) // e.g. "npm run dev", "python main.py"
+  buildCommand    String?  @map("build_command") @db.VarChar(500) // e.g. "npm run build"
+  workingDir      String   @default("/") @map("working_dir") @db.VarChar(200)
+  envVars         Json     @default("{}") @map("env_vars") @db.JsonB
+  autoDetected    Boolean  @default(true) @map("auto_detected")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("run_configurations")
+}
+
+// ============================================================================
+// GitHub Imports
+// ============================================================================
+
+model GithubImport {
+  id            String   @id @default(uuid()) @db.Uuid
+  projectId     String   @map("project_id") @db.Uuid
+  importedById  String   @map("imported_by") @db.Uuid
+  repoUrl       String   @map("repo_url") @db.VarChar(500)
+  repoName      String?  @map("repo_name") @db.VarChar(200)
+  branch        String   @default("main") @db.VarChar(100)
+  commitSha     String?  @map("commit_sha") @db.VarChar(40)
+  filesImported Int?     @map("files_imported")
+  versionId     String?  @map("version_id") @db.Uuid
+  status        String   @db.VarChar(20) // pending, completed, failed
+  errorMessage  String?  @map("error_message") @db.Text
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId], name: "idx_gh_project")
+  @@map("github_imports")
+}
