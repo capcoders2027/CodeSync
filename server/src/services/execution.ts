@@ -115,8 +115,29 @@ export const executeCode = async (
       if (isDockerMissing) {
         console.log(`[Exec] Docker not available on host. Executing directly in isolated directory: ${tempDir}`);
         try {
-          const directCmd = language === 'python' ? `python3 ${entryFile}` : runCmd;
-          const { stdout, stderr } = await execAsync(directCmd, { cwd: tempDir, timeout: 30000 });
+          let directCmd: string;
+          if (language === 'python') {
+            directCmd = process.platform === 'win32' ? `python "${entryFile}"` : `python3 "${entryFile}"`;
+          } else if (language === 'javascript' || language === 'typescript') {
+            directCmd = `node "${entryFile}"`;
+          } else {
+            directCmd = runCmd;
+          }
+
+          let execOut;
+          try {
+            execOut = await execAsync(directCmd, { cwd: tempDir, timeout: 30000 });
+          } catch (firstErr: any) {
+            // If python3 failed because only 'python' is in PATH (or vice-versa), retry with alternate
+            if (language === 'python' && (firstErr.message?.includes('not found') || firstErr.code === 127)) {
+              const altCmd = directCmd.startsWith('python3') ? `python "${entryFile}"` : `python3 "${entryFile}"`;
+              execOut = await execAsync(altCmd, { cwd: tempDir, timeout: 30000 });
+            } else {
+              throw firstErr;
+            }
+          }
+
+          const { stdout, stderr } = execOut;
           return {
             stdout: stdout || '',
             stderr: stderr || '',

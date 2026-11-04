@@ -32,10 +32,7 @@ services:
       - key: FRONTEND_URL
         value: "*"
       - key: ML_WORKER_URL
-        fromService:
-          type: web
-          name: codesync-ml
-          property: host
+        value: https://codesync-ml.onrender.com
 
   # ─── 2. ML Worker (FastAPI Python Defect-Risk Predictor) ─────────────
   - type: web
