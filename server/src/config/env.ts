@@ -27,7 +27,7 @@ const envSchema = z.object({
   SONARQUBE_TOKEN: z.string().default(''),
   SONARQUBE_API_PASSWORD: z.string().default('admin'),
   
-  ML_WORKER_URL: z.string().default('http://localhost:8000'),
+  ML_WORKER_URL: z.string().transform(url => url.replace(/^["']|["']$/g, '').trim()).default('http://localhost:8000'),
   
   SMTP_HOST: z.string().default('smtp.ethereal.email'),
   SMTP_PORT: z.coerce.number().default(587),

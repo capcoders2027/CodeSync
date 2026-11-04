@@ -143,14 +143,26 @@ predictRouter.post('/', async (req, res, next) => {
       }
     }
 
-    // Call ML Worker
+    // Call ML Worker (with automatic public fallback and cold-start timeout)
+    const targetUrl = env.ML_WORKER_URL.startsWith('http')
+      ? `${env.ML_WORKER_URL}/predict`
+      : `http://${env.ML_WORKER_URL}/predict`;
+
     let predictionResult;
     try {
-      const mlRes = await mlClient.post('/predict', { features });
+      console.log(`[ML Predict] Calling ML Worker at: ${targetUrl}`);
+      const mlRes = await axios.post(targetUrl, { features }, { timeout: 60000 });
       predictionResult = mlRes.data;
     } catch (err: any) {
-      console.error('ML Worker Error:', err.response?.data || err.message);
-      throw new AppError(503, 'ML Prediction Service unavailable. Ensure the ml-worker is running.', 'ML_SERVICE_DOWN');
+      console.error(`[ML Predict] Primary call to ${targetUrl} failed:`, err.message);
+      try {
+        console.log('[ML Predict] Retrying with public ML Worker URL: https://codesync-ml.onrender.com/predict');
+        const fallbackRes = await axios.post('https://codesync-ml.onrender.com/predict', { features }, { timeout: 60000 });
+        predictionResult = fallbackRes.data;
+      } catch (fallbackErr: any) {
+        console.error('[ML Predict] Fallback call also failed:', fallbackErr.message);
+        throw new AppError(503, `ML Prediction Service unavailable: ${fallbackErr.message}. Ensure the ml-worker is awake.`, 'ML_SERVICE_DOWN');
+      }
     }
 
     // Determine risk level
