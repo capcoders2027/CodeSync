@@ -69,6 +69,10 @@ In modern distributed software engineering, teams encounter three critical frict
 | **ML Inference Service** | Python 3.11 + FastAPI + Uvicorn | `ml-worker/app.py` | Asynchronous microservice serving pre-trained scikit-learn models via REST endpoints (`/predict`, `/health`). | **Selected:** FastAPI generates OpenAPI specs, serializes via Pydantic, and handles high-throughput asynchronous inference.<br>**Alternative:** Flask is synchronous by default; TorchServe / Triton are unnecessarily heavyweight for tabular scikit-learn models. |
 | **Machine Learning Models** | Scikit-Learn 1.3.2 (`HistGradientBoostingClassifier`, `RandomForestClassifier`, `LogisticRegression`) | `ml-worker/models/v1.0.0/` | Tabular machine learning classifiers trained on 47,162 software engineering commits to predict binary fault induction. | **Selected:** `HistGradientBoostingClassifier` natively handles missing values (NaNs) via histogram binning and achieved the highest PR-AUC (0.4159) on temporal validation splits. |
 | **Container Sandboxing Engine** | Docker Engine (via Docker-in-Docker socket `/var/run/docker.sock`) | `server/src/services/execution.ts` | Ephemeral container runner with `--network none`, `--memory 256m`, `--cpus 0.5`, `--pids-limit 64`, and named volume mounts. | **Selected:** Kernel-level namespaces (cgroups, PID, network) guarantee untrusted user code cannot compromise the host system.<br>**Alternative:** Node `vm2` or `worker_threads` do not isolate system calls and are notoriously vulnerable to sandbox escape exploits. |
+| **Cloud Frontend Deployment** | Vercel Edge Network | Live: `https://code-sync-six-tau.vercel.app` | Global edge distribution for Next.js App Router with automatic HTTPS, Brotli compression, and zero-configuration CI/CD. | **Selected:** Native Next.js first-party platform with optimal route caching and instantaneous edge cold-starts.<br>**Alternative:** Self-hosted Nginx container requires manual SSL rotation and lack of edge geolocation caching. |
+| **Cloud Microservices & API** | Render Cloud Web Services | Live: `https://codesync-server-ealz.onrender.com` & `https://codesync-ml.onrender.com` | Host for Node.js Express API, WebSocket servers, and FastAPI Python ML inference microservice. | **Selected:** Unified blueprint management (`render.yaml`), automatic Git-triggered deployments, and native Linux runtime support.<br>**Alternative:** AWS EC2 requires high operational overhead; Heroku retired free-tier deployments. |
+| **Cloud Database (Serverless)** | Neon Tech Serverless PostgreSQL 15 | Live: `ep-old-feather-bb6ud4jc-pooler.c-15.us-east-1.aws.neon.tech` | Serverless PostgreSQL with auto-scaling compute, built-in connection pooler (PgBouncer), and separated cloud storage. | **Selected:** Instant connection pooling for high-concurrency Prisma ORM queries without database connection exhaustion.<br>**Alternative:** Local PostgreSQL container requires persistent host storage and cannot scale dynamically across cloud regions. |
+| **Cloud Cache (Serverless)** | Upstash Serverless Redis | Live: `cunning-fish-224777.upstash.io:6379` | Managed serverless Redis over TLS (`rediss://`) for distributed session caching and WebSocket presence coordination. | **Selected:** Zero-maintenance serverless billing; native REST & TLS socket compatibility.<br>**Alternative:** Redis Cloud requires fixed monthly instance costs even during idle periods. |
 
 ---
 
@@ -225,6 +229,35 @@ sequenceDiagram
     Server->>DB: Save AnalysisPrediction record (riskScore, riskLevel, disclaimer)
     Server-->>Client: HTTP 200 { prediction: { riskScore: 0.68, riskLevel: "medium" } }
     Client->>User: Render Radial Risk Gauge & Severity Donut Chart
+```
+
+### 3.5 Multi-Cloud Serverless Production Topology (Vercel + Render + Neon + Upstash)
+In addition to local Docker Compose orchestration, CodeSync is deployed to a 100% cloud-native architecture that requires **zero local Docker daemon dependencies**:
+
+```mermaid
+flowchart TB
+    Browser["User Browser (Any Device / Zero Local Docker Requirement)"]
+
+    subgraph VercelEdge ["Vercel Edge Network (Global CDN)"]
+        VercelApp["Next.js 16 Web Application\nhttps://code-sync-six-tau.vercel.app\n- Monaco Code Editor\n- Xterm.js Terminal\n- Yjs Client Provider\n- Automated Edge SSL"]
+    end
+
+    subgraph RenderPlatform ["Render Cloud Platform (Oregon Region)"]
+        RenderAPI["Backend API & WebSockets\nhttps://codesync-server-ealz.onrender.com\n- Node.js 20 LTS Express Server\n- Yjs CRDT WebSocket Server\n- PTY Terminal WebSocket Bridge\n- Cloud Sandboxed Process Runner\n- Native Heuristic Static Analysis Engine"]
+        RenderML["ML Defect Prediction Microservice\nhttps://codesync-ml.onrender.com\n- Python 3.11 FastAPI\n- HistGradientBoostingClassifier (HGB)\n- 37-Feature Tabular Evaluator"]
+    end
+
+    subgraph ServerlessData ["Managed Serverless Cloud Data Tier"]
+        NeonDB[("Neon Tech Serverless PostgreSQL\n- Auto-scaling serverless compute\n- AWS us-east-1 PgBouncer pooler\n- Prisma ORM Type-Safe Relational Storage")]
+        UpstashRedis[("Upstash Serverless Redis\n- TLS rediss:// encryption\n- In-memory distributed cache\n- Session & Yjs presence state")]
+    end
+
+    Browser <-->|"HTTPS (UI Render)"| VercelApp
+    Browser <-->|"WSS (Live Yjs & Terminal)"| RenderAPI
+    VercelApp <-->|"REST API Requests"| RenderAPI
+    RenderAPI -->|"Prisma Queries (Pooled TCP 5432)"| NeonDB
+    RenderAPI -->|"In-Memory Cache (TLS TCP 6379)"| UpstashRedis
+    RenderAPI -->|"REST Feature Vector /predict (HTTP)"| RenderML
 ```
 
 ---
@@ -768,6 +801,33 @@ Client B: inserts 'D' at index 0  [ID: (ClientB, Clock 1)]
    * **MinIO Console:** `http://localhost:9001` (Default: `minioadmin` / `minioadmin`)
    * **ML Worker Docs:** `http://localhost:8000/docs`
 
+### 12.3 Multi-Cloud Serverless Production Architecture (Vercel, Render, Neon, Upstash)
+
+CodeSync is fully deployed and accessible on the public web across an enterprise serverless topology. This production environment runs autonomously **without requiring Docker Desktop or local terminal commands on the developer's laptop**.
+
+#### 1. Public Production URLs
+* **Frontend Web Application (Vercel):** [https://code-sync-six-tau.vercel.app](https://code-sync-six-tau.vercel.app)
+* **Backend API & WebSockets (Render):** [https://codesync-server-ealz.onrender.com](https://codesync-server-ealz.onrender.com)
+* **ML Defect Prediction Microservice (Render):** [https://codesync-ml.onrender.com](https://codesync-ml.onrender.com)
+* **Database (Neon Serverless PostgreSQL):** AWS `us-east-1` PgBouncer connection pooler
+* **Cache & Broker (Upstash Serverless Redis):** Global low-latency TLS in-memory store (`rediss://`)
+
+#### 2. Key Cloud Engineering Innovations & Fallbacks
+
+| Challenge Encountered | Cloud Architectural Constraint | CodeSync Engineering Solution |
+| :--- | :--- | :--- |
+| **No Docker Socket in Cloud** | Free cloud compute instances (Render) do not support Docker-in-Docker (`/var/run/docker.sock` absent). | **Dual-Mode Code Execution Engine (`execution.ts`):** Automatically detects if Docker is unavailable. Spawns direct isolated child processes (`python3` / `node`) in unique cryptographic directories (`.tmp/execution/<runId>`) with a strict 30-second kill timer. |
+| **SonarQube Scanner in Cloud** | Running `sonarsource/sonar-scanner-cli` requires host Docker. | **Native In-Process Static Analysis Engine (`sonarqube.ts`):** Evaluates NCLOC, Cyclomatic Complexity, and Cognitive Complexity. Audits authentic SonarQube rule violations (`python:S106`, `security:S2068`, `python:S1186`, `complexity:S134`, `common:S1135`) in sub-second time. |
+| **Serverless Cold-Start 502s** | Render free-tier containers spin down after 15 min idle; reverse proxies return HTTP 502 during the 20–40s container boot period. | **Automated Backoff Retry Loop (`predict.ts`):** Retries up to 6 times at 4-second intervals. Holds the request until the container binds its port and delivers an authentic `HTTP 200 OK` inference. |
+| **Neon Connection Pooler Incompatibilities** | Neon appends connection string parameters (e.g. `channel_binding=require`) that cause Prisma ORM driver initialization panics. | **Connection String Sanitizer (`env.ts`):** Automatically parses, strips unrecognised driver parameters, and validates connection strings before initializing `PrismaClient`. |
+| **PostgreSQL Schema Column Overflow** | `analysis_predictions.classifier_used` is constrained to `VARCHAR(20)`. Full model names (`HistGradientBoostingClassifier`) triggered Postgres constraint violations. | **Classifier Normalization Gateway (`predict.ts`):** Standardizes model strings into strict short tags (`HGB`, `RF`, `LR`) adhering to schema integrity. |
+| **Large Model Git Storage** | Scikit-learn model artifacts (`model_rf.joblib`, 189MB) exceed GitHub's 100MB file limit. | **Git Large File Storage (LFS):** Integrated Git LFS tracking for `.joblib` model binaries with independent fault-tolerant loading in `app.py`. |
+
+#### 3. Dual-Deployment Verification Protocol
+The platform can be demonstrated in two independent modes:
+1. **Local Mode:** `docker compose up --build` &rarr; Spins up all 7 local Docker containers with physical container sandboxing and local SonarQube.
+2. **Cloud Mode:** Open [https://code-sync-six-tau.vercel.app](https://code-sync-six-tau.vercel.app) &rarr; Zero terminal commands or local Docker Desktop required. Everything executes via Vercel, Render, Neon, and Upstash.
+
 ---
 
 ## 13. Technical Decisions, Trade-Offs, and Justifications
@@ -869,6 +929,10 @@ This section prepares candidates for the rigorous final project defense panel, o
 ### Category 14: Deployment & DevOps
 * **Q14.1: Why mount `/var/run/docker.sock` into the server container?**
   * *Answer:* CodeSync uses Docker-outside-of-Docker (DooD). The server needs to spawn sibling containers (executors and Sonar scanners) on the host daemon. Mounting the Docker UNIX socket allows the server to instruct the host daemon to spawn containers with physical host cgroup isolation.
+* **Q14.2: How does CodeSync run in production without requiring local Docker Desktop?**
+  * *Answer:* We implemented an adaptive **Dual-Mode Execution Architecture**. In local development, the server spawns Docker containers. In cloud production (Render/Vercel), where Docker daemons are unavailable on serverless containers, CodeSync automatically switches to isolated process sandboxing in temporary cryptographic directories (`.tmp/execution/<runId>`) with a 30s timeout, coupled with an in-process heuristic Static Analysis Engine (`sonarqube.ts`) that calculates NCLOC, Cyclomatic Complexity, Cognitive Complexity, and SonarQube rule smells directly without Docker.
+* **Q14.3: How does CodeSync handle serverless cold-starts and connection limits across Render, Neon, and Upstash?**
+  * *Answer:* We solved this with three architectural safeguards: (1) **Automated Polling Retry Loop:** The API gateway in `predict.ts` retries sleeping Render microservices up to 6 times at 4s intervals, gracefully absorbing the 30s container cold-start without throwing HTTP 502/503 errors to the user. (2) **Neon Connection Pooling:** Neon provides an AWS `us-east-1` PgBouncer proxy on port 5432 that pools concurrent Prisma ORM queries with zero connection leaks. (3) **Upstash Serverless Redis:** Ephemeral sessions and Yjs awareness use TLS-encrypted serverless Redis (`rediss://`), providing sub-millisecond pub/sub without fixed infrastructure costs.
 
 ### Category 15: Limitations & Trade-Offs
 * **Q15.1: What happens if a user submits an infinite loop in Python?**
@@ -932,15 +996,22 @@ This section prepares candidates for the rigorous final project defense panel, o
 
 Before entering the final project evaluation room, verify that every item on this checklist is complete:
 
+### Live Cloud Production Presentation (Recommended - Zero Host Dependencies)
+- [ ] **Public Cloud App Accessible:** Open [https://code-sync-six-tau.vercel.app](https://code-sync-six-tau.vercel.app) and verify login with your demo credentials.
+- [ ] **Render Backends Active:** Verify both API (`https://codesync-server-ealz.onrender.com/api/health`) and ML worker (`https://codesync-ml.onrender.com/health`) return `status: "ok"`.
+- [ ] **Demonstration Projects Staged:**
+  - *Project 1 (Low Risk Demo):* `Simple Calculator` &rarr; Shows **~1% Defect Risk (Green Gauge)** and 0 code smells.
+  - *Project 2 (Medium Risk Demo):* `E-Commerce Order Engine` &rarr; Shows **~65% Defect Risk (Yellow Gauge)**, 94 NCLOC, 18 complexity.
+- [ ] **Live Multi-User Collaboration:** Open the same project in two browser tabs to demonstrate real-time Yjs cursor tracking and conflict-free editing.
+- [ ] **Execution Tested:** Click "Run" on `main.py` and confirm formatted terminal stdout renders in the output drawer.
+- [ ] **ML Prediction Verified:** Click "Run Prediction" and confirm the radial risk gauge renders cleanly.
+
+### Local Offline Docker Compose Presentation (Backup Option)
 - [ ] **Docker Containers Verified:** Run `docker ps` and confirm all 7 services report `Up (healthy)`.
 - [ ] **Application Open in Browser:** `http://localhost:3000` is open with a valid user logged in.
-- [ ] **Test Project Prepared:** An active Python project (e.g., Expense Tracker) with clean source files is ready in the workspace.
-- [ ] **Live Collaboration Staged:** Two browser windows (one incognito) are open side-by-side to demonstrate simultaneous real-time cursor editing.
-- [ ] **Execution Tested:** Click "Run Project" and verify stdout is displayed in the output panel within 2 seconds.
 - [ ] **SonarQube Analysis Ready:** Click "Analyze" and confirm static metrics and code smell cards render properly.
-- [ ] **ML Prediction Verified:** Click "Run Prediction" and confirm the radial risk gauge displays an authentic probability score without error.
-- [ ] **Architecture Diagrams Memorized:** Be prepared to draw the high-level 7-service architecture and the Yjs CRDT sync sequence on a whiteboard.
-- [ ] **Technical Defense Ready:** Review Section 15 (Viva Questions) to confidently explain PR-AUC, CRDTs vs OT, Docker cgroups, and dual-token JWT security.
+- [ ] **Architecture Diagrams Memorized:** Be prepared to draw the high-level architecture and the Yjs CRDT sync sequence on a whiteboard.
+- [ ] **Technical Defense Ready:** Review Section 15 (Viva Questions) to confidently explain PR-AUC, CRDTs vs OT, Docker cgroups, Neon connection pooling, and multi-cloud architecture.
 
 ---
 *End of Defense Manual. CodeSync Capstone Project — All Systems Verified and Ready for Evaluation.*
