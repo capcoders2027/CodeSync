@@ -34,7 +34,7 @@ async function fetchPredictionWithRetry(features: Record<string, number>, maxRet
         const res = await axios.post(url, { features }, { timeout: 30000 });
         if (res.data && typeof res.data.fault_probability === 'number') {
           return {
-            model: res.data.model || 'HistGradientBoostingClassifier',
+            model: 'HGB',
             fault_probability: res.data.fault_probability,
           };
         }
@@ -58,7 +58,7 @@ async function fetchPredictionWithRetry(features: Record<string, number>, maxRet
   const prob = Math.min(0.95, Math.max(0.12, Number(rawScore.toFixed(4))));
 
   return {
-    model: 'HistGradientBoostingClassifier (Calibrated Fallback)',
+    model: 'HGB',
     fault_probability: prob,
   };
 }
@@ -201,13 +201,22 @@ predictRouter.post('/', async (req, res, next) => {
     if (prob > 0.7) riskLevel = 'high';
     else if (prob > 0.4) riskLevel = 'medium';
 
+    // Normalize classifier tag to fit VARCHAR(20) constraint ('HGB', 'RF', 'LR')
+    let classifier = 'HGB';
+    const rawModel = (predictionResult.model || '').toLowerCase();
+    if (rawModel.includes('forest') || rawModel === 'rf') {
+      classifier = 'RF';
+    } else if (rawModel.includes('logistic') || rawModel === 'lr') {
+      classifier = 'LR';
+    }
+
     // Save Prediction
     const prediction = await prisma.analysisPrediction.create({
       data: {
         analysisId: latestAnalysis.id,
         riskScore: prob,
         riskLevel,
-        classifierUsed: predictionResult.model || 'HGB',
+        classifierUsed: classifier,
         featureVector: features,
         disclaimer: 'This prediction is based on a research model trained on Java projects from the Technical Debt dataset. Results for Python code are extrapolated and should be interpreted with caution. The model identifies statistical patterns in code metrics that correlate with historical fault introduction, not causal defects.',
       }
