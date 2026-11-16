@@ -83,6 +83,22 @@ app.get('/api/health', (_req, res) => {
 // API routes
 app.use('/api', apiRouter);
 
+// Fallback for root-relative assets or subpaths requested by previewed web applications
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/') || req.path.startsWith('/ws/')) {
+    return next();
+  }
+  const referer = (req.headers.referer as string) || '';
+  const refMatch = referer.match(/\/api\/preview\/(\d+)/);
+  const cookiePort = req.cookies?.codesync_preview_port;
+  const targetPort = refMatch ? refMatch[1] : cookiePort;
+
+  if (targetPort && /^\d+$/.test(targetPort)) {
+    return res.redirect(307, `/api/preview/${targetPort}${req.originalUrl}`);
+  }
+  next();
+});
+
 // 404 handler
 app.use(notFoundHandler);
 

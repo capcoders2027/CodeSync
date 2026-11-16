@@ -42,6 +42,8 @@ function handleProxy(req: Request, res: Response) {
 
   const proxyReq = http.request(options, (proxyRes) => {
     const resHeaders = { ...proxyRes.headers };
+    const contentType = (resHeaders['content-type'] as string) || '';
+
     // Rewrite redirects so browser remains inside /api/preview/:port
     if (resHeaders.location) {
       let loc = resHeaders.location;
@@ -53,6 +55,35 @@ function handleProxy(req: Request, res: Response) {
         loc = `/api/preview/${port}${loc}`;
       }
       resHeaders.location = loc;
+    }
+
+    // Set cookie on root path so any sub-requests / static assets know which port to target
+    res.cookie('codesync_preview_port', port.toString(), { path: '/', sameSite: 'lax' });
+
+    // For HTML documents, rewrite root-relative links and inject <base> so assets like /static/style.css resolve correctly
+    if (contentType.includes('text/html')) {
+      const chunks: Buffer[] = [];
+      proxyRes.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+      proxyRes.on('end', () => {
+        let html = Buffer.concat(chunks).toString('utf-8');
+
+        // Rewrite root-relative URLs in HTML attributes: href="/...", src="/...", action="/..."
+        html = html.replace(
+          /((?:href|src|action)\s*=\s*["'])\/(?!\/|api\/preview\/)([^"']*["'])/gi,
+          `$1/api/preview/${port}/$2`
+        );
+
+        // Inject <base> tag after <head> for any dynamic or relative assets
+        if (/<head[^>]*>/i.test(html)) {
+          html = html.replace(/(<head[^>]*>)/i, `$1\n  <base href="/api/preview/${port}/">`);
+        }
+
+        delete resHeaders['content-length'];
+        resHeaders['content-length'] = Buffer.byteLength(html).toString();
+        res.writeHead(proxyRes.statusCode || 200, resHeaders);
+        res.end(html);
+      });
+      return;
     }
 
     res.writeHead(proxyRes.statusCode || 200, resHeaders);
