@@ -34,6 +34,7 @@ const envSchema = z.object({
   SMTP_USER: z.string().default('capcoders2027@gmail.com'),
   SMTP_PASS: z.string().default('hghl gejj towg sgfm'),
   EMAIL_FROM: z.string().default('capcoders2027@gmail.com'),
+  RESEND_API_KEY: z.string().optional(),
   
   FRONTEND_URL: z.string()
     .default('http://localhost:3000')

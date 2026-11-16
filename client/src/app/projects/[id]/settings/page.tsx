@@ -10,7 +10,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, Users, Trash2, Crown, UserPlus, Settings, Code2,
   Shield, AlertTriangle, Loader, CheckCircle, LayoutDashboard,
-  Sun, Moon, ShieldCheck, Mail, Check, ShieldAlert
+  Sun, Moon, ShieldCheck, Mail, Check, ShieldAlert, Copy, Link as LinkIcon
 } from 'lucide-react';
 
 interface Member {
@@ -97,7 +97,9 @@ export default function ProjectSettings({ params }: { params: Promise<{ id: stri
 
       const data = await res.json();
       if (res.ok) {
-        toast.success('Invitation sent!', `${inviteEmail} invited as ${inviteRole}.`);
+        const inviteUrl = `${window.location.origin}/projects/${id}`;
+        navigator.clipboard.writeText(inviteUrl).catch(() => {});
+        toast.success('Invitation sent & link copied!', `${inviteEmail} invited as ${inviteRole}. Direct invite link copied to clipboard.`);
         setInviteEmail('');
         fetchProject();
       } else {
@@ -430,7 +432,32 @@ export default function ProjectSettings({ params }: { params: Promise<{ id: stri
                       {getRoleBadge(member.role)}
 
                       {member.invitationStatus === 'pending' && (
-                        <span className="badge badge-yellow">Pending</span>
+                        <div className="flex items-center gap-2">
+                          <span className="badge badge-yellow">Pending</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const inviteUrl = `${window.location.origin}/projects/${id}`;
+                              navigator.clipboard.writeText(inviteUrl);
+                              toast.success('Invite link copied!', 'Send this URL directly to your teammate.');
+                            }}
+                            style={{
+                              fontSize: '11px',
+                              padding: '2px 8px',
+                              background: 'rgba(56, 189, 248, 0.15)',
+                              color: '#38bdf8',
+                              border: '1px solid rgba(56, 189, 248, 0.3)',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                            title="Copy direct invite link for this teammate"
+                          >
+                            <Copy size={11} /> Copy Invite Link
+                          </button>
+                        </div>
                       )}
                       {member.user.id !== project.owner.id && (
                         <button
