@@ -54,34 +54,7 @@ export default function RegisterPage() {
   const handleGoogleSignUp = () => {
     setGoogleLoading(true);
     setError('');
-
-    const handleAuthMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
-        window.removeEventListener('message', handleAuthMessage);
-        login(event.data.accessToken, event.data.user);
-        toast.success('Signed in with Google', `Welcome back, ${event.data.user.displayName}!`);
-        window.location.href = '/';
-      } else if (event.data?.type === 'GOOGLE_AUTH_ERROR') {
-        window.removeEventListener('message', handleAuthMessage);
-        setError(event.data.message || 'Google authentication failed.');
-        setGoogleLoading(false);
-      }
-    };
-    window.addEventListener('message', handleAuthMessage);
-
-    const width = 500;
-    const height = 620;
-    const left = window.screenX + (window.outerWidth - width) / 2;
-    const top = window.screenY + (window.outerHeight - height) / 2;
-    const popup = window.open(
-      `${API_URL}/auth/google`,
-      'google_auth',
-      `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes`
-    );
-
-    if (!popup || popup.closed || typeof popup.closed === 'undefined') {
-      window.location.href = `${API_URL}/auth/google`;
-    }
+    window.location.href = `${API_URL}/auth/google`;
   };
 
   return (
