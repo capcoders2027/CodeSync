@@ -10,7 +10,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, Users, Trash2, Crown, UserPlus, Settings, Code2,
   Shield, AlertTriangle, Loader, CheckCircle, LayoutDashboard,
-  Sun, Moon, ShieldCheck, Mail, Check, ShieldAlert, Copy, Link as LinkIcon
+  Sun, Moon, Copy
 } from 'lucide-react';
 
 interface Member {
@@ -55,8 +55,7 @@ export default function ProjectSettings({ params }: { params: Promise<{ id: stri
   const [loading, setLoading] = useState(true);
   const [inviting, setInviting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [toggling2FA, setToggling2FA] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'members' | 'security'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'members'>('general');
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
   const headers: any = { Authorization: `Bearer ${token}` };
@@ -145,37 +144,6 @@ export default function ProjectSettings({ params }: { params: Promise<{ id: stri
       fetchProject();
     } else {
       toast.error('Failed to remove member');
-    }
-  };
-
-  const handleToggle2FA = async () => {
-    setToggling2FA(true);
-    const nextState = !user?.twoFactorEnabled;
-
-    try {
-      const apiBase = getApiBase();
-      const res = await fetch(`${apiBase}/auth/2fa/toggle`, {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: nextState }),
-      });
-
-      const data = await res.json();
-      if (res.ok) {
-        updateUser({ twoFactorEnabled: nextState });
-        toast.success(
-          nextState ? '2FA Enabled' : '2FA Disabled',
-          nextState
-            ? 'Two-Factor Authentication via email verification codes is now active.'
-            : 'Two-Factor Authentication has been turned off.'
-        );
-      } else {
-        toast.error('Failed to update 2FA', data.message || 'Error updating settings.');
-      }
-    } catch {
-      toast.error('Connection error', 'Could not reach auth server.');
-    } finally {
-      setToggling2FA(false);
     }
   };
 
@@ -278,9 +246,6 @@ export default function ProjectSettings({ params }: { params: Promise<{ id: stri
           <button className={`tab ${activeTab === 'members' ? 'tab-active' : ''}`} onClick={() => setActiveTab('members')}>
             <Users size={14} /> Members & RBAC
             <span className="tab-count">{project.members.length}</span>
-          </button>
-          <button className={`tab ${activeTab === 'security' ? 'tab-active' : ''}`} onClick={() => setActiveTab('security')}>
-            <ShieldCheck size={14} /> Security & 2FA
           </button>
         </div>
 
@@ -514,87 +479,6 @@ export default function ProjectSettings({ params }: { params: Promise<{ id: stri
                     <strong>{ROLES.find(r => r.id === inviteRole)?.name}:</strong> {ROLES.find(r => r.id === inviteRole)?.desc}
                   </div>
                 </form>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Security & 2FA Tab */}
-        {activeTab === 'security' && (
-          <div className="flex flex-col gap-8 animate-in">
-            <div className="card">
-              <div className="card-header flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <ShieldCheck size={20} style={{ color: 'var(--accent-blue)' }} />
-                  <h2 style={{ fontSize: 'var(--text-lg)', margin: 0 }}>Two-Factor Authentication (2FA)</h2>
-                </div>
-                <span className={`badge ${user?.twoFactorEnabled ? 'badge-green' : 'badge-yellow'}`}>
-                  {user?.twoFactorEnabled ? 'Enabled' : 'Disabled'}
-                </span>
-              </div>
-              <div className="card-body">
-                <p className="text-sm text-secondary" style={{ lineHeight: 1.6, marginBottom: 'var(--sp-6)' }}>
-                  Two-factor authentication adds an extra layer of security to your CodeSync account. When enabled, signing in requires both your password and a temporary 6-digit verification code sent securely via Nodemailer to your email address ({user?.email}).
-                </p>
-
-                <div className="flex items-center justify-between" style={{
-                  padding: 'var(--sp-6)',
-                  background: 'var(--bg-elevated)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--border-subtle)',
-                }}>
-                  <div className="flex items-center gap-4">
-                    <div style={{
-                      width: 40, height: 40, borderRadius: '50%',
-                      background: user?.twoFactorEnabled ? 'rgba(34, 197, 94, 0.1)' : 'rgba(234, 179, 8, 0.1)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: user?.twoFactorEnabled ? 'var(--accent-green)' : 'var(--accent-yellow)',
-                    }}>
-                      <Mail size={20} />
-                    </div>
-                    <div>
-                      <div className="font-semibold text-md">Email Verification Codes</div>
-                      <div className="text-xs text-secondary">
-                        {user?.twoFactorEnabled
-                          ? 'Verification codes will be required on each sign-in attempt.'
-                          : 'Turn on email-based 2FA to safeguard your source code and repositories.'}
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={handleToggle2FA}
-                    disabled={toggling2FA}
-                    className={`btn btn-sm ${user?.twoFactorEnabled ? 'btn-ghost' : 'btn-blue'}`}
-                  >
-                    {toggling2FA ? <Loader size={14} className="animate-spin" /> : (user?.twoFactorEnabled ? 'Turn Off 2FA' : 'Enable 2FA')}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="card">
-              <div className="card-header">
-                <div className="flex items-center gap-3">
-                  <ShieldAlert size={18} />
-                  <h2 style={{ fontSize: 'var(--text-lg)', margin: 0 }}>Transactional Notifications</h2>
-                </div>
-              </div>
-              <div className="card-body">
-                <div className="flex flex-col gap-3 text-sm text-secondary">
-                  <div className="flex items-center gap-3">
-                    <Check size={16} style={{ color: 'var(--accent-green)' }} />
-                    <span>Instant alerts upon team member invitations and role changes.</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Check size={16} style={{ color: 'var(--accent-green)' }} />
-                    <span>Security notifications for password reset requests and 2FA changes.</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Check size={16} style={{ color: 'var(--accent-green)' }} />
-                    <span>Expiring secure tokens with cryptographic hashing protection.</span>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
