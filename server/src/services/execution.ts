@@ -36,9 +36,12 @@ const getRunCommand = (language: string, entryFile: string): string => {
   }
 };
 
+// Active persistent web servers (Flask, FastAPI, Express) kept alive for web preview
+const activeWebServers = new Map<string, any>();
+
 /**
  * Direct process execution on the host machine.
- * Detects long-running web servers (Flask, Express, FastAPI) and captures startup status.
+ * Detects long-running web servers (Flask, Express, FastAPI) and keeps them active for the live preview proxy.
  */
 async function runDirectProcess(
   language: string,
@@ -47,6 +50,12 @@ async function runDirectProcess(
   startTime: number,
   isRetry = false
 ): Promise<ExecutionResult> {
+  // If a web server is already running for this directory, terminate it first before re-running
+  const prevServer = activeWebServers.get(targetDir);
+  if (prevServer) {
+    try { prevServer.kill(); } catch {}
+    activeWebServers.delete(targetDir);
+  }
   // Pre-install requirements.txt if present before execution
   if (language === 'python' && !isRetry) {
     try {
@@ -109,16 +118,20 @@ async function runDirectProcess(
         'Press CTRL+C to quit',
       ];
       if (!resolved && serverKeywords.some(kw => chunk.includes(kw))) {
-        // Wait 600ms to collect any final startup output
+        // Retain web server in background so users can interact with it via the live preview proxy!
+        activeWebServers.set(targetDir, child);
         setTimeout(() => {
-          const banner = `\n\n✨ [CodeSync] Application server is running! To interact with it live or test routes continuously, use the Terminal tab below.`;
-          cleanupAndResolve({
+          if (resolved) return;
+          resolved = true;
+          if (timer) clearTimeout(timer);
+          const banner = `\n\n✨ [CodeSync] Web server is active and listening! Click "Open Live Preview" above to test your application.`;
+          resolve({
             stdout: stdout + banner,
             stderr,
             exitCode: 0,
             durationMs: Date.now() - startTime,
           });
-        }, 600);
+        }, 800);
       }
     };
 
@@ -144,6 +157,7 @@ async function runDirectProcess(
     });
 
     child.on('close', async (code) => {
+      activeWebServers.delete(targetDir);
       let finalStderr = stderr;
 
       // Auto-install missing Python dependency (e.g. flask, requests) on Render / Linux host and retry

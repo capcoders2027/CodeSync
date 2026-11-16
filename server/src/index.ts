@@ -20,18 +20,24 @@ const httpServer = createServer(app);
 // Global Middleware
 // ---------------------------------------------------------------------------
 
-// Security headers
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "blob:"],
-      connectSrc: ["'self'", "ws:", "wss:"],
+// Security headers - bypass CSP for /api/preview so hosted web apps and preview pages function properly
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/preview')) {
+    return next();
+  }
+  return helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        scriptSrcAttr: ["'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "blob:", "https:"],
+        connectSrc: ["'self'", "ws:", "wss:", "https:"],
+      },
     },
-  },
-}));
+  })(req, res, next);
+});
 
 // CORS
 app.use(cors({

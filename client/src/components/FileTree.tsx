@@ -25,23 +25,23 @@ interface FileTreeProps {
 }
 
 const FILE_ICONS: Record<string, { color: string }> = {
-  '.py':   { color: '#3572A5' },
-  '.js':   { color: '#f1e05a' },
-  '.ts':   { color: '#3178c6' },
-  '.tsx':  { color: '#3178c6' },
-  '.jsx':  { color: '#f1e05a' },
+  '.py': { color: '#3572A5' },
+  '.js': { color: '#f1e05a' },
+  '.ts': { color: '#3178c6' },
+  '.tsx': { color: '#3178c6' },
+  '.jsx': { color: '#f1e05a' },
   '.json': { color: '#6e7681' },
-  '.md':   { color: '#58a6ff' },
+  '.md': { color: '#58a6ff' },
   '.html': { color: '#e34c26' },
-  '.css':  { color: '#563d7c' },
+  '.css': { color: '#563d7c' },
   '.java': { color: '#b07219' },
-  '.png':  { color: '#00d8ff' },
-  '.jpg':  { color: '#00d8ff' },
+  '.png': { color: '#00d8ff' },
+  '.jpg': { color: '#00d8ff' },
   '.jpeg': { color: '#00d8ff' },
-  '.gif':  { color: '#00d8ff' },
-  '.svg':  { color: '#00d8ff' },
+  '.gif': { color: '#00d8ff' },
+  '.svg': { color: '#00d8ff' },
   '.webp': { color: '#00d8ff' },
-  '.ico':  { color: '#00d8ff' },
+  '.ico': { color: '#00d8ff' },
 };
 
 function getFileColor(name: string) {
@@ -364,9 +364,9 @@ export function FileTree({ projectId, onSelectFile, activeFileId, width = 250 }:
             <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
               {file.type === 'folder'
                 ? (isExpanded
-                    ? <FolderOpen size={14} style={{ color: 'var(--accent-blue)' }} />
-                    : <Folder size={14} style={{ color: 'var(--accent-blue)' }} />
-                  )
+                  ? <FolderOpen size={14} style={{ color: 'var(--accent-blue)' }} />
+                  : <Folder size={14} style={{ color: 'var(--accent-blue)' }} />
+                )
                 : /\.(png|jpe?g|gif|svg|webp|ico|bmp)$/i.test(file.name)
                   ? <ImageIcon size={14} style={{ color: 'var(--accent-cyan)' }} />
                   : <FileCode size={14} style={{ color: getFileColor(file.name) }} />
@@ -570,7 +570,7 @@ export function FileTree({ projectId, onSelectFile, activeFileId, width = 250 }:
       <div style={{ overflowY: 'auto', flex: 1, paddingTop: 'var(--sp-2)', paddingBottom: 'var(--sp-4)' }}>
         {loading ? (
           <div style={{ padding: 'var(--sp-6)', display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
-            {[1,2,3,4].map(i => (
+            {[1, 2, 3, 4].map(i => (
               <div key={i} className="skeleton skeleton-text" style={{ width: `${60 + i * 15}%`, height: 12 }} />
             ))}
           </div>

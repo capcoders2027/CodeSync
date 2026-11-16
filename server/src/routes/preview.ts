@@ -9,6 +9,11 @@ function handleProxy(req: Request, res: Response) {
     return res.status(400).json({ status: 'error', message: 'Invalid port. Must be between 1024 and 65535.' });
   }
 
+  // Ensure CSP headers do not block inline scripts or asset loading in the preview proxy
+  res.removeHeader('Content-Security-Policy');
+  res.removeHeader('X-Content-Security-Policy');
+  res.removeHeader('X-WebKit-CSP');
+
   // Ensure trailing slash for root preview URL so relative HTML assets load correctly
   if (req.originalUrl === `/api/preview/${port}`) {
     return res.redirect(301, `/api/preview/${port}/`);
@@ -56,11 +61,16 @@ function handleProxy(req: Request, res: Response) {
 
   proxyReq.on('error', (err: any) => {
     if (err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET') {
+      res.removeHeader('Content-Security-Policy');
+      res.removeHeader('X-Content-Security-Policy');
+      res.removeHeader('X-WebKit-CSP');
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(502).send(`
         <!DOCTYPE html>
         <html lang="en">
           <head>
             <meta charset="utf-8" />
+            <meta http-equiv="refresh" content="3" />
             <title>Web Preview · Port ${port}</title>
             <style>
               body {
@@ -99,15 +109,32 @@ function handleProxy(req: Request, res: Response) {
                 font-weight: 600;
               }
               button:hover { background: #1d4ed8; }
+              .spinner {
+                display: inline-block;
+                width: 14px;
+                height: 14px;
+                border: 2px solid rgba(255,255,255,0.3);
+                border-top-color: #38bdf8;
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+                margin-left: 8px;
+                vertical-align: middle;
+              }
+              @keyframes spin { to { transform: rotate(360deg); } }
             </style>
           </head>
           <body>
             <div class="card">
-              <h2>Port ${port} Not Active Yet</h2>
-              <p>Your web application is not listening on port <code>${port}</code> right now.</p>
-              <p>Run your project in CodeSync terminal (e.g. <code>python app.py</code>) and wait for the server to start, then refresh this page.</p>
-              <button onclick="window.location.reload()">Refresh Preview</button>
+              <h2>Port ${port} Connecting... <span class="spinner"></span></h2>
+              <p>Your web application is starting or not yet active on port <code>${port}</code>.</p>
+              <p>Click <strong>▶ Run Project</strong> or run <code>python app.py</code> in the CodeSync terminal. This page will automatically refresh every 3 seconds.</p>
+              <button id="reload-btn">Refresh Now</button>
             </div>
+            <script>
+              document.getElementById('reload-btn').addEventListener('click', function() {
+                window.location.reload();
+              });
+            </script>
           </body>
         </html>
       `);
