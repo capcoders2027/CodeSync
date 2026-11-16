@@ -2,7 +2,8 @@
    CodeSync Design System
    ============================================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+/* Font families use high-performance system stack to prevent QUIC / HTTP3 network timeout errors */
+/* @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap'); */
 
 /* ----------------------------------------------------------------------------
    Design Tokens

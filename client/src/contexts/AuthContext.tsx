@@ -31,7 +31,15 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('user');
+      if (saved) {
+        try { return JSON.parse(saved); } catch {}
+      }
+    }
+    return null;
+  });
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
@@ -51,8 +59,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (res.ok) {
           const data = await res.json();
           setUser(data.data.user);
+          localStorage.setItem('user', JSON.stringify(data.data.user));
         } else {
           localStorage.removeItem('accessToken');
+          localStorage.removeItem('user');
+          setUser(null);
         }
       } catch (e) {
         console.error('Auth initialization failed', e);
@@ -66,8 +77,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const login = (accessToken: string, user: User) => {
     localStorage.setItem('accessToken', accessToken);
+    localStorage.setItem('user', JSON.stringify(user));
     setUser(user);
-    router.push('/');
+    window.location.href = '/';
   };
 
   const logout = async () => {
@@ -77,8 +89,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.error('Logout failed', e);
     }
     localStorage.removeItem('accessToken');
+    localStorage.removeItem('user');
     setUser(null);
-    router.push('/auth/login');
+    window.location.href = '/auth/login';
   };
 
   const updateUser = (updatedFields: Partial<User>) => {

@@ -724,97 +724,9 @@ authRouter.get('/google/callback', async (req, res, next) => {
     const userJson = JSON.stringify({ id: user.id, email: user.email, displayName: user.displayName, emailVerified: user.emailVerified, avatarUrl: user.avatarUrl });
     const targetUrl = `${env.FRONTEND_URL}/auth/google/callback?token=${accessToken}&user=${encodeURIComponent(userJson)}`;
 
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <meta http-equiv="refresh" content="1;url=${targetUrl}">
-        <title>CodeSync - Signed In</title>
-        <style>
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #090d16;
-            color: #f1f5f9;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-          }
-          .card {
-            background: #111827;
-            border: 1px solid #1f2937;
-            border-radius: 12px;
-            padding: 32px 40px;
-            text-align: center;
-            max-width: 380px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-          }
-          .spinner {
-            width: 36px;
-            height: 36px;
-            border: 3px solid #3b82f6;
-            border-top-color: transparent;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin: 0 auto 16px;
-          }
-          @keyframes spin { to { transform: rotate(360deg); } }
-          h3 { margin: 0 0 8px; color: #60a5fa; font-size: 18px; }
-          p { margin: 0 0 20px; color: #94a3b8; font-size: 14px; }
-          .btn {
-            display: inline-block;
-            background: #2563eb;
-            color: #fff;
-            padding: 8px 20px;
-            border-radius: 6px;
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 500;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="card">
-          <div class="spinner"></div>
-          <h3>Signed in with Google!</h3>
-          <p>Redirecting to your CodeSync workspace...</p>
-          <a id="directLink" href="${targetUrl}" class="btn">Enter CodeSync &rarr;</a>
-        </div>
-        <script>
-          try {
-            if (window.opener && !window.opener.closed) {
-              window.opener.postMessage({
-                type: 'GOOGLE_AUTH_SUCCESS',
-                accessToken: "${accessToken}",
-                user: ${userJson}
-              }, '*');
-              setTimeout(function() {
-                try { window.close(); } catch(e) {}
-              }, 400);
-            }
-          } catch(e) {}
-
-          // Immediate fallback redirect in this window
-          setTimeout(function() {
-            window.location.replace("${targetUrl}");
-          }, 600);
-        </script>
-      </body>
-      </html>
-    `);
+    return res.redirect(targetUrl);
   } catch (err: any) {
     console.error('[Google OAuth Error]', err.response?.data || err.message);
-    res.status(500).send(`
-      <script>
-        if (window.opener) {
-          window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', message: 'Failed to authenticate with Google.' }, '*');
-          window.close();
-        } else {
-          window.location.href = "${env.FRONTEND_URL}/auth/login?error=google_failed";
-        }
-      </script>
-    `);
+    return res.redirect(`${env.FRONTEND_URL}/auth/login?error=google_failed`);
   }
 });
