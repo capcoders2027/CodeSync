@@ -35,7 +35,17 @@ const envSchema = z.object({
   SMTP_PASS: z.string().optional(),
   EMAIL_FROM: z.string().default('noreply@codesync.dev'),
   
-  FRONTEND_URL: z.string().default('http://localhost:3000'),
+  FRONTEND_URL: z.string()
+    .default('http://localhost:3000')
+    .transform(val => {
+      const clean = (val || '').trim().replace(/^["']|["']$/g, '');
+      if (!clean || clean === '*' || !clean.startsWith('http')) {
+        return process.env.NODE_ENV === 'production'
+          ? 'https://code-sync-six-tau.vercel.app'
+          : 'http://localhost:3000';
+      }
+      return clean.replace(/\/$/, '');
+    }),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
   
   GOOGLE_CLIENT_ID: z.string().optional(),

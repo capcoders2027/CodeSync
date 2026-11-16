@@ -30,7 +30,7 @@ services:
       - key: CORS_ORIGIN
         value: "*"
       - key: FRONTEND_URL
-        value: "*"
+        value: https://code-sync-six-tau.vercel.app
       - key: ML_WORKER_URL
         value: https://codesync-ml.onrender.com
 

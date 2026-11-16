@@ -17,6 +17,25 @@ import {
 
 export const authRouter = Router();
 
+function getFrontendUrl(req?: any): string {
+  let url = env.FRONTEND_URL;
+  if (!url || url === '*' || url === '"*"' || !url.startsWith('http')) {
+    const origin = req?.get?.('origin') || req?.get?.('referer');
+    if (origin && origin.startsWith('http') && !origin.includes('onrender.com') && !origin.includes('google.com')) {
+      try {
+        const parsed = new URL(origin);
+        return `${parsed.protocol}//${parsed.host}`;
+      } catch {
+        // fallback
+      }
+    }
+    return process.env.NODE_ENV === 'production'
+      ? 'https://code-sync-six-tau.vercel.app'
+      : 'http://localhost:3000';
+  }
+  return url.replace(/\/$/, '');
+}
+
 // Validation Schemas
 const registerSchema = z.object({
   email: z.string().email(),
@@ -530,7 +549,7 @@ authRouter.get('/google', async (req, res, next) => {
       };
 
       const userJson = JSON.stringify(userPayload);
-      const targetUrl = `${env.FRONTEND_URL}/auth/google/callback?token=${accessToken}&user=${encodeURIComponent(userJson)}`;
+      const targetUrl = `${getFrontendUrl(req)}/auth/google/callback?token=${accessToken}&user=${encodeURIComponent(userJson)}`;
       return res.redirect(targetUrl);
     }
 
@@ -592,7 +611,7 @@ authRouter.post('/google/mock', async (req, res, next) => {
     };
 
     const userJson = JSON.stringify(userPayload);
-    const targetUrl = `${env.FRONTEND_URL}/auth/google/callback?token=${accessToken}&user=${encodeURIComponent(userJson)}`;
+    const targetUrl = `${getFrontendUrl(req)}/auth/google/callback?token=${accessToken}&user=${encodeURIComponent(userJson)}`;
     return res.redirect(targetUrl);
   } catch (err) {
     next(err);
@@ -613,7 +632,7 @@ authRouter.get('/google/callback', async (req, res, next) => {
             window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', message: '${error || 'Authentication denied'}' }, '*');
             window.close();
           } else {
-            window.location.href = "${env.FRONTEND_URL}/auth/login?error=google_denied";
+            window.location.href = "${getFrontendUrl(req)}/auth/login?error=google_denied";
           }
         </script>
       `);
@@ -680,11 +699,11 @@ authRouter.get('/google/callback', async (req, res, next) => {
     });
 
     const userJson = JSON.stringify({ id: user.id, email: user.email, displayName: user.displayName, emailVerified: user.emailVerified, avatarUrl: user.avatarUrl });
-    const targetUrl = `${env.FRONTEND_URL}/auth/google/callback?token=${accessToken}&user=${encodeURIComponent(userJson)}`;
+    const targetUrl = `${getFrontendUrl(req)}/auth/google/callback?token=${accessToken}&user=${encodeURIComponent(userJson)}`;
 
     return res.redirect(targetUrl);
   } catch (err: any) {
     console.error('[Google OAuth Error]', err.response?.data || err.message);
-    return res.redirect(`${env.FRONTEND_URL}/auth/login?error=google_failed`);
+    return res.redirect(`${getFrontendUrl(req)}/auth/login?error=google_failed`);
   }
 });
