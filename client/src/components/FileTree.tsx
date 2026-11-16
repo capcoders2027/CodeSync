@@ -127,9 +127,18 @@ export function FileTree({ projectId, onSelectFile, activeFileId, width = 250 }:
       });
     } else if (entry.isDirectory) {
       const reader = entry.createReader();
-      const entries: any[] = await new Promise((resolve) => {
-        reader.readEntries((results: any[]) => resolve(results));
-      });
+      const readAllEntries = async (): Promise<any[]> => {
+        const all: any[] = [];
+        let batch: any[] = [];
+        do {
+          batch = await new Promise((resolve) => {
+            reader.readEntries((results: any[]) => resolve(results || []), () => resolve([]));
+          });
+          all.push(...batch);
+        } while (batch.length > 0);
+        return all;
+      };
+      const entries = await readAllEntries();
       const currentPath = basePath ? `${basePath}/${entry.name}` : entry.name;
       const subFiles = await Promise.all(
         entries.map((subEntry) => getFilesFromEntry(subEntry, currentPath))

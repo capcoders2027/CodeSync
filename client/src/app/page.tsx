@@ -727,9 +727,9 @@ function AppHeader({ user, onLogout }: { user: any; onLogout: () => void }) {
                     <div className="text-sm text-tertiary">{user.email}</div>
                   </div>
                   <div style={{ padding: 'var(--sp-2)' }}>
-                    <button className="dropdown-item" onClick={() => { setMenuOpen(false); }}>
+                    <Link href="/" className="dropdown-item" onClick={() => { setMenuOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
                       <LayoutDashboard size={16} /> Dashboard
-                    </button>
+                    </Link>
                     <div className="dropdown-divider" />
                     <button className="dropdown-item dropdown-item-danger" onClick={() => { setMenuOpen(false); onLogout(); }}>
                       <LogOut size={16} /> Sign out
