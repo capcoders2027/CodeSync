@@ -80,7 +80,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     localStorage.setItem('accessToken', accessToken);
     localStorage.setItem('user', JSON.stringify(user));
     setUser(user);
-    window.location.href = '/';
+    window.location.href = '/dashboard';
   };
 
   const logout = async () => {

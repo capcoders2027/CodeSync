@@ -440,7 +440,7 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
     return (
       <div className="flex flex-col items-center justify-center" style={{ height: '100vh', background: 'var(--bg-root)' }}>
         <h2>Project not found</h2>
-        <Link href="/" className="btn btn-secondary" style={{ marginTop: 'var(--sp-4)' }}>Back to dashboard</Link>
+        <Link href="/dashboard" className="btn btn-secondary" style={{ marginTop: 'var(--sp-4)' }}>Back to dashboard</Link>
       </div>
     );
   }
@@ -453,11 +453,20 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
         backgroundColor: 'var(--bg-secondary)',
         borderBottom: '1px solid var(--border-subtle)', flexShrink: 0,
       }}>
-        {/* Left: Dashboard Button & Breadcrumb */}
+        {/* Left: Home & Dashboard Buttons & Breadcrumb */}
         <div className="flex items-center gap-2">
-          {/* Prominent Dashboard Button */}
           <Link
             href="/"
+            className="btn btn-sm btn-ghost"
+            data-tooltip="CodeSync Home"
+            style={{ padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 4 }}
+          >
+            <Code2 size={16} color="var(--accent-blue)" />
+          </Link>
+
+          {/* Prominent Dashboard Button */}
+          <Link
+            href="/dashboard"
             className="btn btn-sm btn-ghost"
             data-tooltip="Return to Dashboard"
             style={{ padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, color: 'var(--text-primary)' }}
