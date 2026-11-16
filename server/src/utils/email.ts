@@ -121,3 +121,69 @@ export const sendProjectInvitationEmail = async (
   }
 };
 
+export const sendTwoFactorCodeEmail = async (email: string, code: string) => {
+  if (!env.SMTP_USER || !env.SMTP_PASS || env.SMTP_HOST.includes('ethereal')) {
+    console.log(`[Email Mock] 2FA Verification Code for ${email}: ${code}`);
+    return;
+  }
+
+  try {
+    const info = await transporter.sendMail({
+      from: env.EMAIL_FROM,
+      to: email,
+      subject: 'CodeSync - Two-Factor Authentication (2FA) Code',
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; border: 1px solid #334155; border-radius: 8px; background-color: #0d1117; color: #f0f6fc;">
+          <h2 style="color: #58a6ff; margin-top: 0;">CodeSync Security Verification</h2>
+          <p style="font-size: 15px; line-height: 1.5; color: #8b949e;">
+            Use the following 6-digit code to complete your two-factor authentication login. This code expires in 10 minutes.
+          </p>
+          <div style="margin: 24px 0; text-align: center;">
+            <span style="display: inline-block; font-family: monospace; font-size: 32px; letter-spacing: 8px; font-weight: 700; color: #38bdf8; background: #161b22; padding: 12px 24px; border-radius: 6px; border: 1px solid #30363d;">
+              ${code}
+            </span>
+          </div>
+          <p style="font-size: 13px; color: #6e7681;">
+            If you did not request this verification code, please secure your account immediately.
+          </p>
+        </div>
+      `,
+    });
+
+    if (env.SMTP_HOST.includes('ethereal')) {
+      console.log(`[Email] 2FA code sent to ${email}. Preview: ${nodemailer.getTestMessageUrl(info)}`);
+    } else {
+      console.log(`[Email] 2FA code sent to ${email}`);
+    }
+  } catch (error) {
+    console.error(`[Email Error] Failed to send 2FA code email to ${email}.`);
+    console.log(`[Email Mock] 2FA Code for ${email}: ${code}`);
+  }
+};
+
+export const sendSecurityNotification = async (email: string, title: string, message: string) => {
+  if (!env.SMTP_USER || !env.SMTP_PASS || env.SMTP_HOST.includes('ethereal')) {
+    console.log(`[Email Mock] Security Alert for ${email}: ${title} - ${message}`);
+    return;
+  }
+
+  try {
+    await transporter.sendMail({
+      from: env.EMAIL_FROM,
+      to: email,
+      subject: `CodeSync Security Alert: ${title}`,
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; border: 1px solid #f85149; border-radius: 8px; background-color: #0d1117; color: #f0f6fc;">
+          <h2 style="color: #f85149; margin-top: 0;">${title}</h2>
+          <p style="font-size: 15px; line-height: 1.5; color: #c9d1d9;">${message}</p>
+          <p style="font-size: 13px; color: #8b949e; margin-top: 24px;">
+            If this wasn't you, we recommend resetting your password immediately.
+          </p>
+        </div>
+      `,
+    });
+  } catch (error) {
+    console.error(`[Email Error] Failed to send security alert to ${email}`);
+  }
+};
+

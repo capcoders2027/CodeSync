@@ -37,6 +37,11 @@ const envSchema = z.object({
   
   FRONTEND_URL: z.string().default('http://localhost:3000'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
+  
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_CALLBACK_URL: z.string().optional(),
+  
   DOCKER_NETWORK: z.string().optional(),
   // Host-visible path for execution temp files.
   // In Docker Compose this must be a path on the HOST that Docker can bind-mount

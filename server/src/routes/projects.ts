@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../db';
 import { AppError } from '../middleware/error';
 import { requireAuth } from '../middleware/auth';
-import { requireProjectRole } from '../middleware/role';
+import { requireProjectRole, getDefaultPermissions } from '../middleware/role';
 import { sendProjectInvitationEmail } from '../utils/email';
 
 export const projectsRouter = Router();
@@ -17,11 +17,8 @@ const createProjectSchema = z.object({
 
 const inviteMemberSchema = z.object({
   email: z.string().email(),
-  role: z.enum(['team_lead', 'member']).default('member'),
-  permissions: z.object({
-    can_trigger_analysis: z.boolean().default(false),
-    can_view_analysis: z.boolean().default(false),
-  }).default({}),
+  role: z.enum(['team_lead', 'developer', 'tester', 'member', 'viewer']).default('member'),
+  permissions: z.record(z.boolean()).optional(),
 });
 
 // All project routes require authentication
@@ -100,9 +97,10 @@ projectsRouter.post('/', async (req, res, next) => {
 });
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // GET /api/projects/:projectId - Get project details
 // ---------------------------------------------------------------------------
-projectsRouter.get('/:projectId', requireProjectRole(['team_lead', 'member']), async (req, res, next) => {
+projectsRouter.get('/:projectId', requireProjectRole(['team_lead', 'developer', 'tester', 'member', 'viewer']), async (req, res, next) => {
   try {
     const { projectId } = req.params;
 
@@ -135,6 +133,57 @@ projectsRouter.get('/:projectId', requireProjectRole(['team_lead', 'member']), a
 });
 
 // ---------------------------------------------------------------------------
+// GET /api/projects/:projectId/history - Get chronological project activity & versions
+// ---------------------------------------------------------------------------
+projectsRouter.get('/:projectId/history', requireProjectRole(['team_lead', 'developer', 'tester', 'member', 'viewer']), async (req, res, next) => {
+  try {
+    const { projectId } = req.params;
+    const page = parseInt(req.query.page as string || '1', 10);
+    const limit = Math.min(50, parseInt(req.query.limit as string || '20', 10));
+    const skip = (page - 1) * limit;
+
+    const [activities, totalCount, versions] = await Promise.all([
+      prisma.activityLog.findMany({
+        where: { projectId },
+        include: {
+          user: { select: { id: true, displayName: true, email: true, avatarUrl: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.activityLog.count({ where: { projectId } }),
+      prisma.version.findMany({
+        where: { projectId },
+        include: {
+          createdBy: { select: { id: true, displayName: true } },
+          changeStats: true,
+          _count: { select: { files: true } },
+        },
+        orderBy: { versionNumber: 'desc' },
+        take: 10,
+      }),
+    ]);
+
+    res.json({
+      status: 'success',
+      data: {
+        activities,
+        versions,
+        pagination: {
+          page,
+          limit,
+          totalCount,
+          totalPages: Math.ceil(totalCount / limit),
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/projects/:projectId/members - Invite a member
 // ---------------------------------------------------------------------------
 projectsRouter.post('/:projectId/members', requireProjectRole(['team_lead']), async (req, res, next) => {
@@ -142,6 +191,11 @@ projectsRouter.post('/:projectId/members', requireProjectRole(['team_lead']), as
     const { projectId } = req.params;
     const { email, role, permissions } = inviteMemberSchema.parse(req.body);
     const inviterId = req.user!.id;
+
+    const effectivePermissions = {
+      ...getDefaultPermissions(role),
+      ...(permissions || {}),
+    };
 
     // Fetch existing user or create a placeholder for new invitee
     let userToInvite = await prisma.user.findUnique({ where: { email } });
@@ -176,7 +230,7 @@ projectsRouter.post('/:projectId/members', requireProjectRole(['team_lead']), as
         projectId,
         userId: userToInvite.id,
         role,
-        permissions,
+        permissions: effectivePermissions,
         invitedById: inviterId,
         invitationStatus: 'pending',
       },
@@ -184,6 +238,17 @@ projectsRouter.post('/:projectId/members', requireProjectRole(['team_lead']), as
         user: { select: { id: true, displayName: true, email: true, avatarUrl: true } }
       }
     });
+
+    await prisma.activityLog.create({
+      data: {
+        projectId,
+        userId: inviterId,
+        action: 'member_invited',
+        entityType: 'member',
+        entityId: member.id,
+        metadata: { email, role },
+      },
+    }).catch(err => console.error('[ActivityLog Error]', err));
 
     // Send project invitation email asynchronously
     const project = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true } });
@@ -211,7 +276,7 @@ projectsRouter.patch('/:projectId/members/:userId', requireProjectRole(['team_le
   try {
     const { projectId, userId } = req.params;
     const updateSchema = z.object({
-      role: z.enum(['team_lead', 'member']).optional(),
+      role: z.enum(['team_lead', 'developer', 'tester', 'member', 'viewer']).optional(),
       permissions: z.record(z.boolean()).optional(),
     });
     const updates = updateSchema.parse(req.body);
@@ -224,10 +289,28 @@ projectsRouter.patch('/:projectId/members/:userId', requireProjectRole(['team_le
       throw new AppError(404, 'Member not found', 'NOT_FOUND');
     }
 
+    const effectivePermissions = updates.role
+      ? { ...getDefaultPermissions(updates.role), ...(updates.permissions || {}) }
+      : updates.permissions;
+
     const updatedMember = await prisma.projectMember.update({
       where: { id: member.id },
-      data: updates,
+      data: {
+        ...(updates.role ? { role: updates.role } : {}),
+        ...(effectivePermissions ? { permissions: effectivePermissions } : {}),
+      },
     });
+
+    await prisma.activityLog.create({
+      data: {
+        projectId,
+        userId: req.user!.id,
+        action: 'member_updated',
+        entityType: 'member',
+        entityId: member.id,
+        metadata: { targetUserId: userId, newRole: updates.role },
+      },
+    }).catch(err => console.error('[ActivityLog Error]', err));
 
     res.json({ status: 'success', data: { member: updatedMember } });
   } catch (error) {

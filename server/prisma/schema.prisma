@@ -24,6 +24,10 @@ model User {
   verificationToken  String?   @map("verification_token") @db.VarChar(255)
   resetToken         String?   @map("reset_token") @db.VarChar(255)
   resetTokenExpires  DateTime? @map("reset_token_expires") @db.Timestamptz
+  googleId           String?   @unique @map("google_id") @db.VarChar(255)
+  twoFactorEnabled   Boolean   @default(false) @map("two_factor_enabled")
+  twoFactorCode      String?   @map("two_factor_code") @db.VarChar(10)
+  twoFactorExpires   DateTime? @map("two_factor_expires") @db.Timestamptz
   createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   lastLoginAt        DateTime? @map("last_login_at") @db.Timestamptz

@@ -1,17 +1,25 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import multer from 'multer';
+import path from 'path';
 import { prisma } from '../db';
 import { AppError } from '../middleware/error';
 import { requireAuth } from '../middleware/auth';
 import { requireProjectRole } from '../middleware/role';
 
-export const filesRouter = Router({ mergeParams: true }); // Important for nested routes like /projects/:projectId/files
+export const filesRouter = Router({ mergeParams: true });
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB limit per file
+});
 
 // Validation Schemas
 const createFileSchema = z.object({
   name: z.string().min(1).max(255),
   type: z.enum(['file', 'folder']),
   parentId: z.string().uuid().nullable().optional(),
+  content: z.string().optional(),
 });
 
 const renameFileSchema = z.object({
@@ -19,7 +27,7 @@ const renameFileSchema = z.object({
 });
 
 // All file operations require at least member access
-filesRouter.use(requireAuth, requireProjectRole(['team_lead', 'member']));
+filesRouter.use(requireAuth, requireProjectRole(['team_lead', 'developer', 'tester', 'member']));
 
 // ---------------------------------------------------------------------------
 // GET /api/projects/:projectId/files - Get complete file tree
@@ -81,10 +89,22 @@ filesRouter.post('/', async (req, res, next) => {
         name,
         type,
         parentId: parentId || null,
-        content: type === 'file' ? '' : null,
+        content: type === 'file' ? (req.body.content || '') : null,
       },
       select: { id: true, name: true, type: true, parentId: true, updatedAt: true }
     });
+
+    // Log Activity
+    await prisma.activityLog.create({
+      data: {
+        projectId,
+        userId: req.user!.id,
+        action: type === 'folder' ? 'folder_created' : 'file_created',
+        entityType: 'file',
+        entityId: file.id,
+        metadata: { name: file.name, type: file.type, parentId },
+      },
+    }).catch(err => console.error('[ActivityLog Error]', err));
 
     // Touch project updatedAt to reflect recent activity
     await prisma.project.update({
@@ -93,6 +113,217 @@ filesRouter.post('/', async (req, res, next) => {
     });
 
     res.status(201).json({ status: 'success', data: { file } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/projects/:projectId/files/:fileId - Get single file with content
+// ---------------------------------------------------------------------------
+filesRouter.get('/:fileId', async (req, res, next) => {
+  try {
+    const { projectId, fileId } = req.params as { projectId: string, fileId: string };
+
+    const file = await prisma.file.findUnique({
+      where: { id: fileId },
+      select: { id: true, name: true, type: true, parentId: true, content: true, updatedAt: true, sizeBytes: true }
+    });
+
+    if (!file || file.type !== 'file') {
+      throw new AppError(404, 'File not found', 'NOT_FOUND');
+    }
+
+    res.json({ status: 'success', data: { file } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PUT /api/projects/:projectId/files/:fileId - Save/update file content
+// ---------------------------------------------------------------------------
+filesRouter.put('/:fileId', async (req, res, next) => {
+  try {
+    const { projectId, fileId } = req.params as { projectId: string, fileId: string };
+    const { content } = z.object({ content: z.string() }).parse(req.body);
+
+    const existingFile = await prisma.file.findUnique({ where: { id: fileId } });
+    if (!existingFile || existingFile.projectId !== projectId) {
+      throw new AppError(404, 'File not found', 'NOT_FOUND');
+    }
+
+    const updated = await prisma.file.update({
+      where: { id: fileId },
+      data: {
+        content,
+        sizeBytes: Buffer.byteLength(content, 'utf8'),
+      },
+      select: { id: true, name: true, updatedAt: true, sizeBytes: true }
+    });
+
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { updatedAt: new Date() },
+    });
+
+    await prisma.activityLog.create({
+      data: {
+        projectId,
+        userId: req.user!.id,
+        action: 'file_updated',
+        entityType: 'file',
+        entityId: fileId,
+        metadata: { name: existingFile.name },
+      },
+    }).catch(err => console.error('[ActivityLog Error]', err));
+
+    res.json({ status: 'success', data: { file: updated } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/projects/:projectId/files/upload - Bulk file & folder upload
+// ---------------------------------------------------------------------------
+filesRouter.post('/upload', upload.array('files', 100), async (req, res, next) => {
+  try {
+    const { projectId } = req.params as { projectId: string };
+    const uploadedFiles = req.files as Express.Multer.File[];
+
+    if (!uploadedFiles || uploadedFiles.length === 0) {
+      throw new AppError(400, 'No files uploaded', 'BAD_REQUEST');
+    }
+
+    let relativePaths: string[] = [];
+    if (req.body.paths) {
+      try {
+        relativePaths = typeof req.body.paths === 'string' ? JSON.parse(req.body.paths) : req.body.paths;
+      } catch {
+        relativePaths = [];
+      }
+    }
+
+    const createdFiles: any[] = [];
+    const folderCache = new Map<string, string>(); // relativeFolderPath -> folderId
+
+    for (let i = 0; i < uploadedFiles.length; i++) {
+      const uploadFile = uploadedFiles[i];
+      const relPath = (relativePaths[i] || uploadFile.originalname).replace(/\\/g, '/');
+      const segments = relPath.split('/').filter(Boolean);
+
+      let currentParentId: string | null = null;
+      let folderPathAccumulator = '';
+
+      // Traverse or create folder hierarchy
+      for (let s = 0; s < segments.length - 1; s++) {
+        const folderName = segments[s];
+        folderPathAccumulator = folderPathAccumulator ? `${folderPathAccumulator}/${folderName}` : folderName;
+
+        if (folderCache.has(folderPathAccumulator)) {
+          currentParentId = folderCache.get(folderPathAccumulator)!;
+        } else {
+          // Look up or create folder in DB
+          let folder = await prisma.file.findFirst({
+            where: {
+              projectId,
+              parentId: currentParentId,
+              name: folderName,
+              type: 'folder',
+            },
+          });
+
+          if (!folder) {
+            folder = await prisma.file.create({
+              data: {
+                projectId,
+                parentId: currentParentId,
+                name: folderName,
+                type: 'folder',
+              },
+            });
+          }
+
+          currentParentId = folder.id;
+          folderCache.set(folderPathAccumulator, folder.id);
+        }
+      }
+
+      // Leaf file
+      const originalFileName = segments[segments.length - 1] || uploadFile.originalname;
+      let finalFileName = originalFileName;
+
+      // Handle duplicate names
+      const existingFile = await prisma.file.findFirst({
+        where: {
+          projectId,
+          parentId: currentParentId,
+          name: finalFileName,
+        },
+      });
+
+      const fileContent = uploadFile.buffer.toString('utf8');
+
+      if (existingFile) {
+        // If overwrite requested or rename
+        if (req.body.overwrite === 'true' || req.body.overwrite === true) {
+          const updated = await prisma.file.update({
+            where: { id: existingFile.id },
+            data: {
+              content: fileContent,
+              sizeBytes: uploadFile.size,
+            },
+          });
+          createdFiles.push(updated);
+          continue;
+        } else {
+          // Append timestamp / suffix to avoid conflict
+          const ext = path.extname(originalFileName);
+          const base = path.basename(originalFileName, ext);
+          finalFileName = `${base}_${Date.now().toString().slice(-4)}${ext}`;
+        }
+      }
+
+      const created = await prisma.file.create({
+        data: {
+          projectId,
+          parentId: currentParentId,
+          name: finalFileName,
+          type: 'file',
+          content: fileContent,
+          sizeBytes: uploadFile.size,
+        },
+      });
+
+      createdFiles.push(created);
+    }
+
+    // Touch project updatedAt
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { updatedAt: new Date() },
+    });
+
+    // Log Activity
+    await prisma.activityLog.create({
+      data: {
+        projectId,
+        userId: req.user!.id,
+        action: 'files_uploaded',
+        entityType: 'project',
+        metadata: {
+          fileCount: createdFiles.length,
+          files: createdFiles.map(f => f.name).slice(0, 5),
+        },
+      },
+    }).catch(err => console.error('[ActivityLog Error]', err));
+
+    res.status(201).json({
+      status: 'success',
+      data: { files: createdFiles, count: createdFiles.length },
+      message: `Successfully uploaded ${createdFiles.length} file(s).`,
+    });
   } catch (error) {
     next(error);
   }
@@ -126,6 +357,17 @@ filesRouter.patch('/:fileId/rename', async (req, res, next) => {
       select: { id: true, name: true, type: true, parentId: true, updatedAt: true }
     });
 
+    await prisma.activityLog.create({
+      data: {
+        projectId,
+        userId: req.user!.id,
+        action: 'file_renamed',
+        entityType: 'file',
+        entityId: fileId,
+        metadata: { oldName: file.name, newName: name },
+      },
+    }).catch(err => console.error('[ActivityLog Error]', err));
+
     // Touch project updatedAt to reflect recent activity
     await prisma.project.update({
       where: { id: projectId },
@@ -152,6 +394,17 @@ filesRouter.delete('/:fileId', async (req, res, next) => {
 
     // Cascade delete is handled by Prisma schema (onDelete: Cascade)
     await prisma.file.delete({ where: { id: fileId } });
+
+    await prisma.activityLog.create({
+      data: {
+        projectId,
+        userId: req.user!.id,
+        action: 'file_deleted',
+        entityType: 'file',
+        entityId: fileId,
+        metadata: { name: file.name, type: file.type },
+      },
+    }).catch(err => console.error('[ActivityLog Error]', err));
 
     // Touch project updatedAt to reflect recent activity
     await prisma.project.update({

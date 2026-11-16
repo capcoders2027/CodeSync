@@ -2,6 +2,67 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../db';
 import { AppError } from './error';
 
+export const getDefaultPermissions = (role: string): Record<string, boolean> => {
+  switch (role) {
+    case 'team_lead':
+      return {
+        can_trigger_analysis: true,
+        can_view_analysis: true,
+        can_execute_code: true,
+        can_edit_files: true,
+        can_delete_files: true,
+        can_create_versions: true,
+        can_manage_members: true,
+        can_delete_project: true,
+      };
+    case 'developer':
+      return {
+        can_trigger_analysis: true,
+        can_view_analysis: true,
+        can_execute_code: true,
+        can_edit_files: true,
+        can_delete_files: true,
+        can_create_versions: true,
+        can_manage_members: false,
+        can_delete_project: false,
+      };
+    case 'tester':
+      return {
+        can_trigger_analysis: true,
+        can_view_analysis: true,
+        can_execute_code: true,
+        can_edit_files: true,
+        can_delete_files: false,
+        can_create_versions: false,
+        can_manage_members: false,
+        can_delete_project: false,
+      };
+    case 'member':
+      return {
+        can_trigger_analysis: true,
+        can_view_analysis: true,
+        can_execute_code: true,
+        can_edit_files: true,
+        can_delete_files: false,
+        can_create_versions: false,
+        can_manage_members: false,
+        can_delete_project: false,
+      };
+    case 'viewer':
+    default:
+      return {
+        can_trigger_analysis: false,
+        can_view_analysis: true,
+        can_execute_code: false,
+        can_edit_files: false,
+        can_delete_files: false,
+        can_create_versions: false,
+        can_manage_members: false,
+        can_delete_project: false,
+      };
+  }
+};
+
 /**
  * Middleware to check if the authenticated user has a specific role or permission within a project.
  * Assumes req.user is set (use requireAuth before this).
@@ -20,6 +81,16 @@ export const requireProjectRole = (allowedRoles: string[]) => {
         throw new AppError(400, 'Project ID is required for role verification', 'BAD_REQUEST');
       }
 
+      // Check if user is the direct owner of the project
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { ownerId: true }
+      });
+
+      if (project && project.ownerId === userId) {
+        return next();
+      }
+
       const member = await prisma.projectMember.findUnique({
         where: {
           idx_pm_project_user: {
@@ -34,12 +105,10 @@ export const requireProjectRole = (allowedRoles: string[]) => {
       }
 
       if (!allowedRoles.includes(member.role)) {
-        throw new AppError(403, 'Forbidden: Insufficient project role', 'FORBIDDEN');
+        throw new AppError(403, `Forbidden: Insufficient project role '${member.role}'`, 'FORBIDDEN');
       }
 
-      // Attach member info to request for subsequent handlers if needed
       (req as any).projectMember = member;
-      
       next();
     } catch (error) {
       next(error);
@@ -58,6 +127,16 @@ export const requireProjectPermission = (permissionKey: string) => {
       const projectId = req.params.projectId || req.body.projectId;
       if (!projectId) {
         throw new AppError(400, 'Project ID is required for permission verification', 'BAD_REQUEST');
+      }
+
+      // Project owner has all permissions
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { ownerId: true }
+      });
+
+      if (project && project.ownerId === userId) {
+        return next();
       }
 
       const member = await prisma.projectMember.findUnique({

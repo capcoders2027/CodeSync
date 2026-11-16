@@ -93,7 +93,11 @@ analysisRouter.post('/', async (req, res, next) => {
         complexity: sonarResults.metrics.complexity,
         cognitiveComplexity: sonarResults.metrics.cognitive_complexity,
         duplicatedLinesDensity: sonarResults.metrics.duplicated_lines_density,
+        duplicatedLines: sonarResults.metrics.duplicated_lines ?? 0,
+        duplicatedBlocks: sonarResults.metrics.duplicated_blocks ?? 0,
+        duplicatedFiles: sonarResults.metrics.duplicated_files ?? 0,
         coverage: sonarResults.metrics.coverage,
+        lineCoverage: sonarResults.metrics.coverage,
         ncloc: sonarResults.metrics.ncloc,
       }
     });

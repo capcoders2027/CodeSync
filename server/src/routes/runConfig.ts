@@ -194,6 +194,8 @@ runConfigRouter.post('/run', async (req, res, next) => {
 
 interface DetectedConfig {
   projectType: string;
+  framework?: string;
+  entryFile?: string;
   entryCommand: string;
   buildCommand: string | null;
   workingDir: string;
@@ -209,19 +211,30 @@ async function detectProjectType(projectId: string): Promise<DetectedConfig> {
   const fileNames = files.map(f => f.name);
   const fileMap = new Map(files.map(f => [f.name, f.content || '']));
 
-  // Check for package.json (Node.js)
+  // Check for package.json (Node.js & JS frameworks)
   if (fileNames.includes('package.json')) {
     try {
       const pkg = JSON.parse(fileMap.get('package.json') || '{}');
+      const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
       const scripts = pkg.scripts || {};
 
+      let framework = 'Node.js';
+      if (deps['next']) framework = 'Next.js';
+      else if (deps['react']) framework = 'React';
+      else if (deps['express']) framework = 'Express.js';
+      else if (deps['@nestjs/core']) framework = 'NestJS';
+      else if (deps['fastify']) framework = 'Fastify';
+
       let command = 'node index.js';
+      let entryFile = pkg.main || 'index.js';
       if (scripts.dev) command = 'npm run dev';
       else if (scripts.start) command = 'npm start';
       else if (pkg.main) command = `node ${pkg.main}`;
 
       return {
         projectType: 'nodejs',
+        framework,
+        entryFile,
         entryCommand: command,
         buildCommand: scripts.build ? 'npm run build' : null,
         workingDir: '/',
@@ -230,65 +243,70 @@ async function detectProjectType(projectId: string): Promise<DetectedConfig> {
     } catch {}
   }
 
-  // Check for requirements.txt / pyproject.toml (Python)
-  if (fileNames.includes('requirements.txt') || fileNames.includes('pyproject.toml')) {
+  // Check for Python (requirements.txt / pyproject.toml / .py files)
+  const hasPython = fileNames.some(f => f.endsWith('.py'));
+  if (fileNames.includes('requirements.txt') || fileNames.includes('pyproject.toml') || hasPython) {
+    const reqContent = fileMap.get('requirements.txt') || '';
+    const allPyContent = files.filter(f => f.name.endsWith('.py')).map(f => f.content || '').join('\n');
+
+    let framework = 'Python';
+    if (/fastapi/i.test(reqContent) || /from\s+fastapi|import\s+fastapi/.test(allPyContent)) framework = 'FastAPI';
+    else if (/flask/i.test(reqContent) || /from\s+flask|import\s+flask/.test(allPyContent)) framework = 'Flask';
+    else if (/django/i.test(reqContent) || /django/.test(allPyContent)) framework = 'Django';
+
     let entryFile = 'main.py';
     if (fileNames.includes('app.py')) entryFile = 'app.py';
-    if (fileNames.includes('main.py')) entryFile = 'main.py';
-    if (fileNames.includes('manage.py')) entryFile = 'manage.py';
+    else if (fileNames.includes('main.py')) entryFile = 'main.py';
+    else if (fileNames.includes('manage.py')) entryFile = 'manage.py';
+    else {
+      const pyFile = fileNames.find(f => f.endsWith('.py'));
+      if (pyFile) entryFile = pyFile;
+    }
+
+    let command = `python ${entryFile}`;
+    if (framework === 'FastAPI' && fileNames.includes('main.py')) command = 'uvicorn main:app --reload';
+    else if (framework === 'Django' && fileNames.includes('manage.py')) command = 'python manage.py runserver';
 
     return {
       projectType: 'python',
-      entryCommand: `python ${entryFile}`,
+      framework,
+      entryFile,
+      entryCommand: command,
       buildCommand: null,
       workingDir: '/',
-      confidence: 'high',
+      confidence: fileNames.includes('requirements.txt') ? 'high' : 'medium',
     };
   }
 
-  // Check for pom.xml (Java/Maven)
-  if (fileNames.includes('pom.xml')) {
+  // Check for pom.xml / build.gradle (Java)
+  const hasJava = fileNames.some(f => f.endsWith('.java'));
+  if (fileNames.includes('pom.xml') || fileNames.includes('build.gradle') || hasJava) {
+    const pomContent = fileMap.get('pom.xml') || '';
+    let framework = 'Java';
+    if (/spring-boot/i.test(pomContent)) framework = 'Spring Boot';
+
+    const entry = fileNames.find(f => f === 'Main.java') || fileNames.find(f => f.endsWith('.java')) || 'Main.java';
+
     return {
       projectType: 'java',
-      entryCommand: 'mvn exec:java',
+      framework,
+      entryFile: entry,
+      entryCommand: framework === 'Spring Boot' ? 'mvn spring-boot:run' : 'mvn exec:java',
       buildCommand: 'mvn compile',
       workingDir: '/',
-      confidence: 'medium',
+      confidence: fileNames.includes('pom.xml') ? 'high' : 'medium',
     };
   }
 
-  // Fallback: detect from file extensions
-  const hasPython = fileNames.some(f => f.endsWith('.py'));
+  // Fallback: detect from JS/TS file extensions
   const hasJS = fileNames.some(f => f.endsWith('.js') || f.endsWith('.ts'));
-  const hasJava = fileNames.some(f => f.endsWith('.java'));
-
-  if (hasPython) {
-    const entry = fileNames.find(f => f === 'main.py') || fileNames.find(f => f.endsWith('.py')) || 'main.py';
-    return {
-      projectType: 'python',
-      entryCommand: `python ${entry}`,
-      buildCommand: null,
-      workingDir: '/',
-      confidence: 'low',
-    };
-  }
-
   if (hasJS) {
-    const entry = fileNames.find(f => f === 'index.js') || fileNames.find(f => f.endsWith('.js')) || 'index.js';
+    const entry = fileNames.find(f => f === 'index.js') || fileNames.find(f => f.endsWith('.js') || f.endsWith('.ts')) || 'index.js';
     return {
       projectType: 'nodejs',
+      framework: 'JavaScript',
+      entryFile: entry,
       entryCommand: `node ${entry}`,
-      buildCommand: null,
-      workingDir: '/',
-      confidence: 'low',
-    };
-  }
-
-  if (hasJava) {
-    const entry = fileNames.find(f => f === 'Main.java') || fileNames.find(f => f.endsWith('.java')) || 'Main.java';
-    return {
-      projectType: 'java',
-      entryCommand: `java ${entry}`,
       buildCommand: null,
       workingDir: '/',
       confidence: 'low',
@@ -297,6 +315,7 @@ async function detectProjectType(projectId: string): Promise<DetectedConfig> {
 
   return {
     projectType: 'custom',
+    framework: 'Custom',
     entryCommand: 'echo "No entry point configured"',
     buildCommand: null,
     workingDir: '/',
