@@ -7,6 +7,7 @@ import {
   ChevronsUpDown
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
+import { useTabs } from '../contexts/TabsContext';
 
 interface FileNode {
   id: string;
@@ -59,6 +60,7 @@ export function FileTree({ projectId, onSelectFile, activeFileId, width = 250 }:
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
+  const { closeTab } = useTabs();
 
   useEffect(() => {
     fetchFiles();
@@ -138,12 +140,31 @@ export function FileTree({ projectId, onSelectFile, activeFileId, width = 250 }:
 
   const handleDelete = async (fileId: string) => {
     if (!confirm('Are you sure you want to delete this?')) return;
+
+    // Collect target file ID and any descendant file IDs (if deleting a folder)
+    const collectDescendantIds = (targetId: string): string[] => {
+      const ids: string[] = [targetId];
+      const children = files.filter(f => f.parentId === targetId);
+      for (const child of children) {
+        ids.push(...collectDescendantIds(child.id));
+      }
+      return ids;
+    };
+
+    const idsToClose = collectDescendantIds(fileId);
+
     const token = localStorage.getItem('accessToken');
     const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-    await fetch(`${apiBase}/projects/${projectId}/files/${fileId}`, {
+    const res = await fetch(`${apiBase}/projects/${projectId}/files/${fileId}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` }
     });
+
+    if (res.ok) {
+      // Automatically close all tabs associated with the deleted file or folder
+      idsToClose.forEach(id => closeTab(id));
+      toast.success('Deleted', 'Removed from workspace');
+    }
     fetchFiles();
     setContextMenu(null);
   };

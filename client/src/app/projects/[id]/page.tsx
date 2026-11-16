@@ -67,13 +67,10 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
   const { getWorkspace, setWorkspace } = useWorkspace();
   const { tabs, activeTabId, openFile, closeTab, setActiveTab, setProjectScope, closeAllTabs } = useTabs();
 
-  // Scope tabs to the active project; automatically close tabs on project change or unmount
+  // Scope tabs to the active project; preserves open tabs per project across dashboard visits
   useEffect(() => {
     setProjectScope(id);
-    return () => {
-      closeAllTabs();
-    };
-  }, [id, setProjectScope, closeAllTabs]);
+  }, [id, setProjectScope]);
 
   // Try restoring from workspace cache to prevent reload on window switch
   const cachedWs = getWorkspace(id);
