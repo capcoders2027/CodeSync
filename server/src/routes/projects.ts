@@ -389,18 +389,28 @@ projectsRouter.post('/:projectId/members', requireProjectRole(['team_lead']), as
       },
     }).catch(err => console.error('[ActivityLog Error]', err));
 
-    // Send project invitation email asynchronously
-    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true } });
-    const inviter = await prisma.user.findUnique({ where: { id: inviterId }, select: { displayName: true } });
+    // Send project invitation email asynchronously with team lead details, role, privileges, and project info
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { name: true, description: true, language: true },
+    });
+    const inviter = await prisma.user.findUnique({
+      where: { id: inviterId },
+      select: { displayName: true, email: true },
+    });
 
-    sendProjectInvitationEmail(
+    sendProjectInvitationEmail({
       email,
-      project?.name || 'Project',
-      inviter?.displayName || 'Team Lead',
+      projectName: project?.name || 'Project',
+      projectDescription: project?.description || null,
+      projectLanguage: project?.language || 'python',
+      inviterName: inviter?.displayName || 'Team Lead',
+      inviterEmail: inviter?.email,
       projectId,
       role,
-      isNewUser
-    ).catch(err => console.error('[Invite Email Error]', err));
+      permissions: effectivePermissions,
+      isNewUser,
+    }).catch(err => console.error('[Invite Email Error]', err));
 
     res.status(201).json({ status: 'success', data: { member }, message: 'Invitation sent' });
   } catch (error) {

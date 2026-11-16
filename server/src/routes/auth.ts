@@ -529,33 +529,9 @@ authRouter.get('/google', async (req, res, next) => {
         avatarUrl: user.avatarUrl,
       };
 
-      return res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head><title>Google Sign-In - CodeSync</title></head>
-        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0d1117; color: #c9d1d9; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
-          <div style="text-align: center; background: #161b22; padding: 32px 48px; border-radius: 12px; border: 1px solid #30363d;">
-            <div style="width: 24px; height: 24px; border: 3px solid #58a6ff; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px;"></div>
-            <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
-            <h3 style="color: #58a6ff; margin: 0 0 8px;">Signed in with Google</h3>
-            <p style="color: #8b949e; font-size: 14px; margin: 0;">Redirecting to your CodeSync workspace...</p>
-          </div>
-          <script>
-            const authPayload = {
-              type: 'GOOGLE_AUTH_SUCCESS',
-              accessToken: "${accessToken}",
-              user: ${JSON.stringify(userPayload)}
-            };
-            if (window.opener && !window.opener.closed) {
-              window.opener.postMessage(authPayload, '*');
-              setTimeout(() => window.close(), 300);
-            } else {
-              window.location.href = "${env.FRONTEND_URL}/auth/google/callback?token=${accessToken}&user=${encodeURIComponent(JSON.stringify(userPayload))}";
-            }
-          </script>
-        </body>
-        </html>
-      `);
+      const userJson = JSON.stringify(userPayload);
+      const targetUrl = `${env.FRONTEND_URL}/auth/google/callback?token=${accessToken}&user=${encodeURIComponent(userJson)}`;
+      return res.redirect(targetUrl);
     }
 
     const googleAuthUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' +
@@ -615,27 +591,9 @@ authRouter.post('/google/mock', async (req, res, next) => {
       avatarUrl: user.avatarUrl,
     };
 
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-      <body>
-        <script>
-          const authPayload = {
-            type: 'GOOGLE_AUTH_SUCCESS',
-            accessToken: "${accessToken}",
-            user: ${JSON.stringify(userPayload)}
-          };
-          if (window.opener && !window.opener.closed) {
-            window.opener.postMessage(authPayload, '*');
-            setTimeout(() => window.close(), 300);
-          } else {
-            window.location.href = "${env.FRONTEND_URL}/auth/google/callback?token=${accessToken}&user=${encodeURIComponent(JSON.stringify(userPayload))}";
-          }
-        </script>
-        <p>Authentication successful. Redirecting...</p>
-      </body>
-      </html>
-    `);
+    const userJson = JSON.stringify(userPayload);
+    const targetUrl = `${env.FRONTEND_URL}/auth/google/callback?token=${accessToken}&user=${encodeURIComponent(userJson)}`;
+    return res.redirect(targetUrl);
   } catch (err) {
     next(err);
   }
