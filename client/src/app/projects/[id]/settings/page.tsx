@@ -10,7 +10,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, Users, Trash2, Crown, UserPlus, Settings, Code2,
   Shield, AlertTriangle, Loader, CheckCircle, LayoutDashboard,
-  Sun, Moon, Copy, Home as HomeIcon
+  Sun, Moon, Copy
 } from 'lucide-react';
 
 interface Member {
@@ -228,10 +228,7 @@ export default function ProjectSettings({ params }: { params: Promise<{ id: stri
           >
             {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
           </button>
-          <Link href="/" className="btn btn-sm btn-ghost" title="Go to Home Page">
-            <HomeIcon size={14} /> Home
-          </Link>
-          <Link href="/dashboard" className="btn btn-sm btn-ghost" title="Go to Workspace Dashboard">
+          <Link href="/" className="btn btn-sm btn-ghost">
             <LayoutDashboard size={14} /> Dashboard
           </Link>
           <Link href={`/projects/${id}`} className="btn btn-sm btn-secondary">

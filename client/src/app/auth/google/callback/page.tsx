@@ -24,8 +24,8 @@ function GoogleCallbackContent() {
           localStorage.setItem('user', JSON.stringify(user));
         } catch {}
       }
-      // Hard browser navigation directly enters dashboard
-      window.location.href = '/dashboard';
+      // Hard browser navigation to root directly enters dashboard
+      window.location.href = '/';
     } else {
       window.location.href = '/auth/login';
     }
