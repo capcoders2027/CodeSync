@@ -18,6 +18,13 @@ function detectShell(): string {
 
 const shell = detectShell();
 
+function getShellArgs(): string[] {
+  if (os.platform() === 'win32') {
+    return ['-NoLogo', '-NoExit', '-Command', 'function prompt { "codesync $ " }'];
+  }
+  return [];
+}
+
 export function setupTerminalWebsocket(httpServer: HttpServer) {
   const wss = new WebSocketServer({ noServer: true });
 
@@ -52,13 +59,17 @@ export function setupTerminalWebsocket(httpServer: HttpServer) {
   wss.on('connection', (ws: WebSocket) => {
     console.log('[Terminal] Client connected');
 
-    // Spawn a PTY process
-    const ptyProcess = pty.spawn(shell, [], {
+    // Spawn a PTY process with clean minimal prompt
+    const ptyProcess = pty.spawn(shell, getShellArgs(), {
       name: 'xterm-256color',
       cols: 120,
       rows: 30,
       cwd: process.cwd(),
-      env: { ...process.env } as Record<string, string>,
+      env: {
+        ...process.env,
+        PS1: 'codesync $ ',
+        TERM: 'xterm-256color',
+      } as Record<string, string>,
     });
 
     // PTY → WebSocket

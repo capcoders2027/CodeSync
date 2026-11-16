@@ -165,10 +165,23 @@ projectsRouter.get('/:projectId/history', requireProjectRole(['team_lead', 'deve
       }),
     ]);
 
+    const mappedActivities = activities.map((a: any) => {
+      const meta = (a.metadata as any) || {};
+      return {
+        id: a.id,
+        action: a.action,
+        type: a.entityType || a.action.split('_')[0] || 'default',
+        message: meta.message || `${a.action.replace(/_/g, ' ')}`,
+        createdAt: a.createdAt,
+        user: a.user,
+        metadata: a.metadata,
+      };
+    });
+
     res.json({
       status: 'success',
       data: {
-        activities,
+        activities: mappedActivities,
         versions,
         pagination: {
           page,
@@ -177,6 +190,132 @@ projectsRouter.get('/:projectId/history', requireProjectRole(['team_lead', 'deve
           totalPages: Math.ceil(totalCount / limit),
         },
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/projects/:projectId/activity - Activity feed endpoint
+// ---------------------------------------------------------------------------
+projectsRouter.get('/:projectId/activity', requireProjectRole(['team_lead', 'developer', 'tester', 'member', 'viewer']), async (req, res, next) => {
+  try {
+    const { projectId } = req.params;
+    const activities = await prisma.activityLog.findMany({
+      where: { projectId },
+      include: {
+        user: { select: { id: true, displayName: true, email: true, avatarUrl: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    const mappedActivities = activities.map((a: any) => {
+      const meta = (a.metadata as any) || {};
+      return {
+        id: a.id,
+        action: a.action,
+        type: a.entityType || a.action.split('_')[0] || 'default',
+        message: meta.message || `${a.action.replace(/_/g, ' ')}`,
+        createdAt: a.createdAt,
+        user: a.user,
+        metadata: a.metadata,
+      };
+    });
+
+    res.json({ status: 'success', data: { activities: mappedActivities } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/projects/:projectId/versions - List version snapshots
+// ---------------------------------------------------------------------------
+projectsRouter.get('/:projectId/versions', requireProjectRole(['team_lead', 'developer', 'tester', 'member', 'viewer']), async (req, res, next) => {
+  try {
+    const { projectId } = req.params;
+    const versions = await prisma.version.findMany({
+      where: { projectId },
+      include: {
+        createdBy: { select: { id: true, displayName: true } },
+        changeStats: true,
+        _count: { select: { files: true, analyses: true } },
+      },
+      orderBy: { versionNumber: 'desc' },
+    });
+
+    res.json({ status: 'success', data: { versions } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/projects/:projectId/versions/:versionId/restore - Restore version snapshot
+// ---------------------------------------------------------------------------
+projectsRouter.post('/:projectId/versions/:versionId/restore', requireProjectRole(['team_lead', 'developer']), async (req, res, next) => {
+  try {
+    const { projectId, versionId } = req.params;
+    const userId = req.user!.id;
+
+    const version = await prisma.version.findUnique({
+      where: { id: versionId },
+      include: { files: true },
+    });
+
+    if (!version || version.projectId !== projectId) {
+      throw new AppError(404, 'Version not found', 'NOT_FOUND');
+    }
+
+    // Restore files
+    let restoredCount = 0;
+    for (const vf of version.files) {
+      const existing = await prisma.file.findFirst({
+        where: { projectId, name: vf.filePath, type: 'file' },
+      });
+
+      if (existing) {
+        await prisma.file.update({
+          where: { id: existing.id },
+          data: { content: vf.content, sizeBytes: vf.sizeBytes, updatedAt: new Date() },
+        });
+      } else {
+        await prisma.file.create({
+          data: {
+            projectId,
+            name: vf.filePath,
+            type: 'file',
+            content: vf.content,
+            sizeBytes: vf.sizeBytes,
+          },
+        });
+      }
+      restoredCount++;
+    }
+
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        projectId,
+        userId,
+        action: 'version_restored',
+        entityType: 'version',
+        entityId: version.id,
+        metadata: {
+          message: `Restored snapshot v${version.versionNumber}: ${version.name} (${restoredCount} files)`,
+          versionId: version.id,
+          versionNumber: version.versionNumber,
+          fileCount: restoredCount,
+        },
+      },
+    }).catch((err) => console.error('[ActivityLog Error]', err));
+
+    res.json({
+      status: 'success',
+      message: `Successfully restored version v${version.versionNumber} (${restoredCount} files).`,
+      data: { versionNumber: version.versionNumber, restoredCount },
     });
   } catch (error) {
     next(error);

@@ -2,10 +2,11 @@
 
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
+import { useTheme } from '../../../../contexts/ThemeContext';
 import {
   ArrowLeft, Activity, Code2, Clock, User, Play,
   ShieldCheck, UserPlus, FileCode, GitBranch, Edit3,
-  Brain, Trash2, Plus
+  Brain, Trash2, Plus, LayoutDashboard, Sun, Moon, Filter
 } from 'lucide-react';
 
 interface ActivityItem {
@@ -14,6 +15,7 @@ interface ActivityItem {
   message: string;
   createdAt: string;
   user?: { displayName: string };
+  metadata?: any;
 }
 
 const AVATAR_COLORS = ['avatar-blue', 'avatar-purple', 'avatar-green', 'avatar-orange', 'avatar-red', 'avatar-cyan', 'avatar-pink'];
@@ -53,7 +55,9 @@ function timeAgo(date: string) {
 
 export default function ActivityPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const { theme, toggleTheme } = useTheme();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [filterType, setFilterType] = useState<string>('all');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { fetchActivity(); }, [id]);
@@ -62,9 +66,14 @@ export default function ActivityPage({ params }: { params: Promise<{ id: string 
     try {
       const token = localStorage.getItem('accessToken');
       const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-      const res = await fetch(`${apiBase}/projects/${id}/activity`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const headers = { Authorization: `Bearer ${token}` };
+
+      // Try history first, fallback to activity
+      let res = await fetch(`${apiBase}/projects/${id}/history`, { headers });
+      if (!res.ok) {
+        res = await fetch(`${apiBase}/projects/${id}/activity`, { headers });
+      }
+
       if (res.ok) {
         const data = await res.json();
         setActivities(data.data?.activities || []);
@@ -76,9 +85,18 @@ export default function ActivityPage({ params }: { params: Promise<{ id: string 
     }
   };
 
+  const filteredActivities = activities.filter((a) => {
+    if (filterType === 'all') return true;
+    if (filterType === 'files') return ['file', 'create', 'edit', 'delete'].includes(a.type);
+    if (filterType === 'analysis') return ['analysis', 'prediction'].includes(a.type);
+    if (filterType === 'versions') return a.type === 'version';
+    if (filterType === 'members') return a.type === 'member';
+    return a.type === filterType;
+  });
+
   // Group activities by date
   const groupedActivities: Record<string, ActivityItem[]> = {};
-  activities.forEach(a => {
+  filteredActivities.forEach(a => {
     const dateKey = new Date(a.createdAt).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
     if (!groupedActivities[dateKey]) groupedActivities[dateKey] = [];
     groupedActivities[dateKey].push(a);
@@ -89,7 +107,7 @@ export default function ActivityPage({ params }: { params: Promise<{ id: string 
       <div className="flex items-center justify-center" style={{ height: '100vh', background: 'var(--bg-root)' }}>
         <div className="flex flex-col items-center gap-4">
           <span className="spinner" style={{ width: 24, height: 24 }} />
-          <span className="text-secondary">Loading activity...</span>
+          <span className="text-secondary">Loading activity history...</span>
         </div>
       </div>
     );
@@ -104,27 +122,58 @@ export default function ActivityPage({ params }: { params: Promise<{ id: string 
         position: 'sticky', top: 0, zIndex: 10,
       }}>
         <div className="flex items-center gap-4">
-          <Link href={`/projects/${id}`} className="btn-icon" style={{ padding: '4px' }}>
+          <Link href={`/projects/${id}`} className="btn-icon" style={{ padding: '4px' }} title="Back to Project">
             <ArrowLeft size={18} />
           </Link>
           <div className="separator-vertical" />
           <div className="flex items-center gap-3">
             <Activity size={18} style={{ color: 'var(--accent-orange)' }} />
-            <h1 style={{ fontSize: 'var(--text-xl)', margin: 0 }}>Activity</h1>
+            <h1 style={{ fontSize: 'var(--text-xl)', margin: 0 }}>Project History & Activity</h1>
           </div>
         </div>
-        <Link href={`/projects/${id}`} className="btn btn-sm btn-secondary">
-          <Code2 size={14} /> Open IDE
-        </Link>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={toggleTheme}
+            className="btn btn-sm btn-ghost"
+            title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+          >
+            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
+          <Link href="/dashboard" className="btn btn-sm btn-ghost">
+            <LayoutDashboard size={14} /> Dashboard
+          </Link>
+          <Link href={`/projects/${id}`} className="btn btn-sm btn-secondary">
+            <Code2 size={14} /> Open IDE
+          </Link>
+        </div>
       </header>
 
-      <main style={{ maxWidth: 700, margin: '0 auto', padding: 'var(--sp-8)' }}>
-        {activities.length === 0 ? (
+      <main style={{ maxWidth: 760, margin: '0 auto', padding: 'var(--sp-8)' }}>
+        {/* Filter Pills */}
+        <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: 'var(--sp-6)' }}>
+          {[
+            { id: 'all', label: 'All Events' },
+            { id: 'files', label: 'Files & Uploads' },
+            { id: 'analysis', label: 'Analysis & Scans' },
+            { id: 'versions', label: 'Snapshots' },
+            { id: 'members', label: 'Team Changes' },
+          ].map((pill) => (
+            <button
+              key={pill.id}
+              className={`btn btn-sm ${filterType === pill.id ? 'btn-blue' : 'btn-ghost'}`}
+              onClick={() => setFilterType(pill.id)}
+            >
+              {pill.label}
+            </button>
+          ))}
+        </div>
+
+        {filteredActivities.length === 0 ? (
           <div className="card">
             <div className="empty-state">
               <div className="empty-state-icon"><Activity size={28} /></div>
-              <h3>No activity yet</h3>
-              <p>Activity will appear here as you and your team work on the project — code executions, analyses, predictions, and more.</p>
+              <h3>No activity found</h3>
+              <p>Activity will appear here as you edit files, run static analysis, upload folders, or collaborate with members.</p>
               <Link href={`/projects/${id}`} className="btn btn-primary">
                 <Code2 size={14} /> Open IDE
               </Link>
@@ -139,18 +188,16 @@ export default function ActivityPage({ params }: { params: Promise<{ id: string 
                   <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
                 </div>
 
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-2">
                   {items.map(item => {
                     const cfg = getActivityConfig(item.type);
                     return (
-                      <div key={item.id} className="flex items-start gap-4" style={{
+                      <div key={item.id} className="card" style={{
                         padding: 'var(--sp-4) var(--sp-5)',
-                        borderRadius: 'var(--radius-sm)',
-                        transition: 'background var(--transition-fast)',
-                      }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      >
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 'var(--sp-4)',
+                      }}>
                         <div style={{
                           width: 32, height: 32, borderRadius: 'var(--radius-sm)',
                           background: 'var(--bg-tertiary)',
@@ -160,8 +207,8 @@ export default function ActivityPage({ params }: { params: Promise<{ id: string 
                           {cfg.icon}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div className="text-md" style={{ lineHeight: 1.5 }}>{item.message}</div>
-                          <div className="flex items-center gap-3 text-sm text-muted" style={{ marginTop: 'var(--sp-1)' }}>
+                          <div className="text-md font-medium" style={{ lineHeight: 1.5 }}>{item.message}</div>
+                          <div className="flex items-center gap-4 text-xs text-muted" style={{ marginTop: 'var(--sp-2)' }}>
                             {item.user && (
                               <span className="flex items-center gap-2">
                                 <div className={`avatar avatar-xs ${getAvatarColor(item.user.displayName)}`}>
@@ -171,6 +218,9 @@ export default function ActivityPage({ params }: { params: Promise<{ id: string 
                               </span>
                             )}
                             <span className="flex items-center gap-1"><Clock size={11} /> {timeAgo(item.createdAt)}</span>
+                            <span className="badge badge-secondary" style={{ textTransform: 'uppercase', fontSize: '10px' }}>
+                              {item.type}
+                            </span>
                           </div>
                         </div>
                       </div>

@@ -2,11 +2,13 @@
 
 import { useState, useEffect, use } from 'react';
 import { useToast } from '../../../../contexts/ToastContext';
+import { useTheme } from '../../../../contexts/ThemeContext';
 import Link from 'next/link';
 import {
   ArrowLeft, ShieldCheck, AlertTriangle, Bug, Brain, TrendingUp,
   ChevronDown, ChevronRight, Activity, Copy, Code2, BarChart3,
-  Loader, Filter, FileCode, AlertCircle, Clock, User, CheckCircle
+  Loader, Filter, FileCode, AlertCircle, Clock, User, CheckCircle,
+  LayoutDashboard, Sun, Moon, RefreshCw, Layers
 } from 'lucide-react';
 
 interface AnalysisEntry {
@@ -19,8 +21,12 @@ interface AnalysisEntry {
     complexity: number | null;
     cognitiveComplexity: number | null;
     coverage: number | null;
+    lineCoverage?: number | null;
     ncloc: number | null;
     duplicatedLinesDensity: number | null;
+    duplicatedLines?: number | null;
+    duplicatedBlocks?: number | null;
+    duplicatedFiles?: number | null;
   } | null;
   _count: { smells: number };
 }
@@ -45,12 +51,14 @@ interface Prediction {
 export default function AnalysisDashboard({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const toast = useToast();
+  const { theme, toggleTheme } = useTheme();
   const [history, setHistory] = useState<AnalysisEntry[]>([]);
   const [prediction, setPrediction] = useState<Prediction | null>(null);
   const [selectedAnalysis, setSelectedAnalysis] = useState<string | null>(null);
   const [smells, setSmells] = useState<Smell[]>([]);
   const [loading, setLoading] = useState(true);
   const [predicting, setPredicting] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'smells' | 'history'>('overview');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
 
@@ -96,6 +104,28 @@ export default function AnalysisDashboard({ params }: { params: Promise<{ id: st
         setSmells(data.data.smells);
       }
     } catch {}
+  };
+
+  const handleRunAnalysis = async () => {
+    setAnalyzing(true);
+    try {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const res = await fetch(`${apiBase}/projects/${id}/analyze`, {
+        method: 'POST',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success('Static analysis complete', `Found ${data.data?.smellCount ?? 0} code issues. Metrics updated.`);
+        await fetchData();
+      } else {
+        toast.error('Analysis failed', data.message || 'Execution error');
+      }
+    } catch {
+      toast.error('Connection error', 'Unable to reach static analysis service.');
+    } finally {
+      setAnalyzing(false);
+    }
   };
 
   const handlePredict = async () => {
@@ -164,16 +194,34 @@ export default function AnalysisDashboard({ params }: { params: Promise<{ id: st
         position: 'sticky', top: 0, zIndex: 10,
       }}>
         <div className="flex items-center gap-4">
-          <Link href={`/projects/${id}`} className="btn-icon" style={{ padding: '4px' }}>
+          <Link href={`/projects/${id}`} className="btn-icon" style={{ padding: '4px' }} title="Back to Project">
             <ArrowLeft size={18} />
           </Link>
           <div className="separator-vertical" />
           <div className="flex items-center gap-3">
             <BarChart3 size={18} style={{ color: 'var(--accent-purple)' }} />
-            <h1 style={{ fontSize: 'var(--text-xl)', margin: 0 }}>Analysis</h1>
+            <h1 style={{ fontSize: 'var(--text-xl)', margin: 0 }}>Analysis & Metrics</h1>
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={toggleTheme}
+            className="btn btn-sm btn-ghost"
+            title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+          >
+            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
+          <Link href="/dashboard" className="btn btn-sm btn-ghost">
+            <LayoutDashboard size={14} /> Dashboard
+          </Link>
+          <button
+            onClick={handleRunAnalysis}
+            disabled={analyzing}
+            className="btn btn-sm btn-blue"
+            title="Execute Static Code Analysis"
+          >
+            {analyzing ? <><Loader size={14} className="animate-spin" /> Analyzing...</> : <><RefreshCw size={14} /> Run Analysis</>}
+          </button>
           <Link href={`/projects/${id}`} className="btn btn-sm btn-secondary">
             <Code2 size={14} /> Open IDE
           </Link>
@@ -271,8 +319,8 @@ export default function AnalysisDashboard({ params }: { params: Promise<{ id: st
                   <Brain size={22} style={{ color: 'var(--accent-purple)' }} />
                 </div>
                 <div>
-                  <div className="font-semibold">ML Prediction Available</div>
-                  <div className="text-sm text-secondary">Run the ML model to predict defect risk from your latest analysis.</div>
+                  <div className="font-semibold">ML Defect Prediction Ready</div>
+                  <div className="text-sm text-secondary">Analyze code complexity and structural metrics using trained ML models.</div>
                 </div>
               </div>
               <button className="btn btn-purple" onClick={handlePredict} disabled={predicting}>
@@ -285,14 +333,14 @@ export default function AnalysisDashboard({ params }: { params: Promise<{ id: st
         {/* Tabs */}
         <div className="tabs" style={{ marginBottom: 'var(--sp-7)' }}>
           <button className={`tab ${activeTab === 'overview' ? 'tab-active' : ''}`} onClick={() => setActiveTab('overview')}>
-            <BarChart3 size={14} /> Metrics
+            <BarChart3 size={14} /> Metrics & Coverage
           </button>
           <button className={`tab ${activeTab === 'smells' ? 'tab-active' : ''}`} onClick={() => setActiveTab('smells')}>
-            <AlertTriangle size={14} /> Code Smells
+            <AlertTriangle size={14} /> Code Smells & Issues
             {smells.length > 0 && <span className="tab-count">{smells.length}</span>}
           </button>
           <button className={`tab ${activeTab === 'history' ? 'tab-active' : ''}`} onClick={() => setActiveTab('history')}>
-            <Clock size={14} /> History
+            <Clock size={14} /> Analysis Snapshots
             <span className="tab-count">{history.length}</span>
           </button>
         </div>
@@ -301,101 +349,173 @@ export default function AnalysisDashboard({ params }: { params: Promise<{ id: st
         {activeTab === 'overview' && (
           <>
             {metrics ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 'var(--sp-8)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-8)' }}>
                 {/* Metrics Grid */}
-                <div className="grid stagger" style={{
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-                  gap: 'var(--sp-5)',
-                  alignContent: 'start',
-                }}>
-                  {[
-                    { label: 'Code Smells', value: latestAnalysis?._count.smells || 0, icon: <AlertTriangle size={16} />, color: 'var(--accent-yellow)' },
-                    { label: 'Complexity', value: metrics.complexity?.toFixed(0) || '—', icon: <Activity size={16} />, color: 'var(--accent-purple)' },
-                    { label: 'Cognitive Complexity', value: metrics.cognitiveComplexity?.toFixed(0) || '—', icon: <Brain size={16} />, color: 'var(--accent-orange)' },
-                    { label: 'Lines of Code', value: metrics.ncloc ? metrics.ncloc.toLocaleString() : '—', icon: <FileCode size={16} />, color: 'var(--accent-blue)' },
-                    { label: 'Coverage', value: metrics.coverage ? `${metrics.coverage.toFixed(1)}%` : '—', icon: <ShieldCheck size={16} />, color: 'var(--accent-green)' },
-                    { label: 'Duplication', value: metrics.duplicatedLinesDensity ? `${metrics.duplicatedLinesDensity.toFixed(1)}%` : '—', icon: <Copy size={16} />, color: 'var(--accent-red)' },
-                  ].map((m, i) => (
-                    <div key={i} className="metric-card animate-slide">
-                      <div className="metric-label" style={{ color: m.color }}>
-                        {m.icon} {m.label}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 'var(--sp-8)' }}>
+                  <div className="grid stagger" style={{
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+                    gap: 'var(--sp-5)',
+                    alignContent: 'start',
+                  }}>
+                    {[
+                      { label: 'Code Smells', value: latestAnalysis?._count.smells ?? 0, icon: <AlertTriangle size={16} />, color: 'var(--accent-yellow)' },
+                      { label: 'Complexity', value: metrics.complexity !== null ? metrics.complexity.toFixed(0) : '—', icon: <Activity size={16} />, color: 'var(--accent-purple)' },
+                      { label: 'Cognitive Complexity', value: metrics.cognitiveComplexity !== null ? metrics.cognitiveComplexity.toFixed(0) : '—', icon: <Brain size={16} />, color: 'var(--accent-orange)' },
+                      { label: 'Lines of Code', value: metrics.ncloc !== null ? metrics.ncloc.toLocaleString() : '—', icon: <FileCode size={16} />, color: 'var(--accent-blue)' },
+                      {
+                        label: 'Code Coverage',
+                        value: (metrics.coverage !== null && metrics.coverage !== undefined)
+                          ? `${metrics.coverage.toFixed(1)}%`
+                          : '0.0%',
+                        icon: <ShieldCheck size={16} />,
+                        color: 'var(--accent-green)',
+                      },
+                      {
+                        label: 'Duplication',
+                        value: (metrics.duplicatedLinesDensity !== null && metrics.duplicatedLinesDensity !== undefined)
+                          ? `${metrics.duplicatedLinesDensity.toFixed(1)}%`
+                          : '0.0%',
+                        icon: <Copy size={16} />,
+                        color: 'var(--accent-red)',
+                      },
+                    ].map((m, i) => (
+                      <div key={i} className="metric-card animate-slide">
+                        <div className="metric-label" style={{ color: m.color }}>
+                          {m.icon} {m.label}
+                        </div>
+                        <div className="metric-value">{m.value}</div>
                       </div>
-                      <div className="metric-value">{m.value}</div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
 
-                {/* Severity Donut */}
-                {smells.length > 0 && (
-                  <div className="card animate-slide" style={{ padding: 'var(--sp-7)' }}>
-                    <div className="text-sm font-semibold" style={{ marginBottom: 'var(--sp-6)', color: 'var(--text-secondary)' }}>
-                      Severity Breakdown
-                    </div>
-                    <div className="flex items-center gap-7">
-                      {/* Donut */}
-                      <div className="severity-donut">
-                        <svg viewBox="0 0 36 36">
-                          {(() => {
-                            const total = smells.length;
-                            const severities = ['BLOCKER', 'CRITICAL', 'MAJOR', 'MINOR', 'INFO'];
-                            const colors = ['#f85149', '#f0883e', '#d29922', '#58a6ff', '#6e7681'];
-                            let offset = 0;
-                            return severities.map((sev, i) => {
-                              const count = severityCounts[sev] || 0;
-                              const pct = total > 0 ? (count / total) * 100 : 0;
-                              const dashArray = `${pct} ${100 - pct}`;
-                              const el = pct > 0 ? (
-                                <circle
-                                  key={sev}
-                                  cx="18" cy="18" r="15.915"
-                                  fill="transparent"
-                                  stroke={colors[i]}
-                                  strokeWidth="3"
-                                  strokeDasharray={dashArray}
-                                  strokeDashoffset={-offset}
-                                  strokeLinecap="round"
-                                />
-                              ) : null;
-                              offset += pct;
-                              return el;
-                            });
-                          })()}
-                        </svg>
-                        <div className="severity-donut-center">
-                          <div className="severity-donut-count">{smells.length}</div>
-                          <div className="severity-donut-label">Total</div>
+                  {/* Severity Donut */}
+                  {smells.length > 0 && (
+                    <div className="card animate-slide" style={{ padding: 'var(--sp-7)' }}>
+                      <div className="text-sm font-semibold" style={{ marginBottom: 'var(--sp-6)', color: 'var(--text-secondary)' }}>
+                        Severity Breakdown
+                      </div>
+                      <div className="flex items-center gap-7">
+                        {/* Donut */}
+                        <div className="severity-donut">
+                          <svg viewBox="0 0 36 36">
+                            {(() => {
+                              const total = smells.length;
+                              const severities = ['BLOCKER', 'CRITICAL', 'MAJOR', 'MINOR', 'INFO'];
+                              const colors = ['#f85149', '#f0883e', '#d29922', '#58a6ff', '#6e7681'];
+                              let offset = 0;
+                              return severities.map((sev, i) => {
+                                const count = severityCounts[sev] || 0;
+                                const pct = total > 0 ? (count / total) * 100 : 0;
+                                const dashArray = `${pct} ${100 - pct}`;
+                                const el = pct > 0 ? (
+                                  <circle
+                                    key={sev}
+                                    cx="18" cy="18" r="15.915"
+                                    fill="transparent"
+                                    stroke={colors[i]}
+                                    strokeWidth="3"
+                                    strokeDasharray={dashArray}
+                                    strokeDashoffset={-offset}
+                                    strokeLinecap="round"
+                                  />
+                                ) : null;
+                                offset += pct;
+                                return el;
+                              });
+                            })()}
+                          </svg>
+                          <div className="severity-donut-center">
+                            <div className="severity-donut-count">{smells.length}</div>
+                            <div className="severity-donut-label">Total</div>
+                          </div>
+                        </div>
+
+                        {/* Legend */}
+                        <div className="severity-legend">
+                          {[
+                            { key: 'BLOCKER', color: '#f85149', label: 'Blocker' },
+                            { key: 'CRITICAL', color: '#f0883e', label: 'Critical' },
+                            { key: 'MAJOR', color: '#d29922', label: 'Major' },
+                            { key: 'MINOR', color: '#58a6ff', label: 'Minor' },
+                            { key: 'INFO', color: '#6e7681', label: 'Info' },
+                          ].filter(s => (severityCounts[s.key] || 0) > 0).map(s => (
+                            <div key={s.key} className="severity-legend-item">
+                              <div className="severity-legend-dot" style={{ background: s.color }} />
+                              <span style={{ color: 'var(--text-secondary)' }}>{s.label}</span>
+                              <span className="severity-legend-count">{severityCounts[s.key] || 0}</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
+                    </div>
+                  )}
+                </div>
 
-                      {/* Legend */}
-                      <div className="severity-legend">
-                        {[
-                          { key: 'BLOCKER', color: '#f85149', label: 'Blocker' },
-                          { key: 'CRITICAL', color: '#f0883e', label: 'Critical' },
-                          { key: 'MAJOR', color: '#d29922', label: 'Major' },
-                          { key: 'MINOR', color: '#58a6ff', label: 'Minor' },
-                          { key: 'INFO', color: '#6e7681', label: 'Info' },
-                        ].filter(s => (severityCounts[s.key] || 0) > 0).map(s => (
-                          <div key={s.key} className="severity-legend-item">
-                            <div className="severity-legend-dot" style={{ background: s.color }} />
-                            <span style={{ color: 'var(--text-secondary)' }}>{s.label}</span>
-                            <span className="severity-legend-count">{severityCounts[s.key] || 0}</span>
-                          </div>
-                        ))}
+                {/* Deep-Dive Diagnostics: Coverage & Duplication Verification Panels */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--sp-6)' }}>
+                  {/* Coverage Details */}
+                  <div className="card" style={{ padding: 'var(--sp-6)' }}>
+                    <div className="flex items-center gap-3" style={{ marginBottom: 'var(--sp-4)' }}>
+                      <ShieldCheck size={18} style={{ color: 'var(--accent-green)' }} />
+                      <h3 style={{ fontSize: 'var(--text-md)', margin: 0, fontWeight: 600 }}>Code Coverage Analysis</h3>
+                    </div>
+                    <div style={{ marginBottom: 'var(--sp-4)' }}>
+                      <div className="flex justify-between items-center" style={{ marginBottom: 'var(--sp-2)' }}>
+                        <span className="text-sm text-secondary">Estimated Line Coverage</span>
+                        <span className="font-semibold" style={{ color: 'var(--accent-green)' }}>
+                          {(metrics.coverage ?? 0).toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="progress-bar" style={{ height: 6 }}>
+                        <div className="progress-fill" style={{ width: `${metrics.coverage ?? 0}%`, background: 'var(--accent-green)' }} />
                       </div>
                     </div>
+                    <p className="text-xs text-secondary" style={{ lineHeight: 1.6, margin: 0 }}>
+                      {(metrics.coverage ?? 0) > 0
+                        ? 'Automated test suite detected. Coverage is computed by mapping test function declarations and assertions against runnable code paths.'
+                        : 'No active test files detected (e.g. *.test.ts, test_*.py, *.spec.js). Add unit test suites to automatically verify statement and branch coverage.'}
+                    </p>
                   </div>
-                )}
+
+                  {/* Duplication Details */}
+                  <div className="card" style={{ padding: 'var(--sp-6)' }}>
+                    <div className="flex items-center gap-3" style={{ marginBottom: 'var(--sp-4)' }}>
+                      <Copy size={18} style={{ color: 'var(--accent-red)' }} />
+                      <h3 style={{ fontSize: 'var(--text-md)', margin: 0, fontWeight: 600 }}>Code Duplication Engine</h3>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--sp-3)', marginBottom: 'var(--sp-4)' }}>
+                      <div style={{ background: 'var(--bg-elevated)', padding: '8px 12px', borderRadius: 'var(--radius-sm)' }}>
+                        <div className="text-xs text-secondary">Density</div>
+                        <div className="font-semibold" style={{ color: 'var(--accent-red)' }}>
+                          {(metrics.duplicatedLinesDensity ?? 0).toFixed(1)}%
+                        </div>
+                      </div>
+                      <div style={{ background: 'var(--bg-elevated)', padding: '8px 12px', borderRadius: 'var(--radius-sm)' }}>
+                        <div className="text-xs text-secondary">Dup. Lines</div>
+                        <div className="font-semibold">{metrics.duplicatedLines ?? 0}</div>
+                      </div>
+                      <div style={{ background: 'var(--bg-elevated)', padding: '8px 12px', borderRadius: 'var(--radius-sm)' }}>
+                        <div className="text-xs text-secondary">Dup. Blocks</div>
+                        <div className="font-semibold">{metrics.duplicatedBlocks ?? 0}</div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-secondary" style={{ lineHeight: 1.6, margin: 0 }}>
+                      {(metrics.duplicatedBlocks ?? 0) > 0
+                        ? `Token sliding-window analysis detected ${metrics.duplicatedBlocks} recurring block(s) across project files.`
+                        : 'Token-based sliding analysis found 0 duplicated blocks. Your codebase maintains clean structural separation.'}
+                    </p>
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="card">
                 <div className="empty-state">
                   <div className="empty-state-icon"><BarChart3 size={28} /></div>
                   <h3>No analysis data</h3>
-                  <p>Run your first analysis from the IDE to see code quality metrics here.</p>
-                  <Link href={`/projects/${id}`} className="btn btn-primary">
-                    <Code2 size={14} /> Open IDE
-                  </Link>
+                  <p>Execute your first static code analysis to compute coverage, duplication, complexity, and smells.</p>
+                  <button onClick={handleRunAnalysis} disabled={analyzing} className="btn btn-primary">
+                    {analyzing ? <><Loader size={14} className="animate-spin" /> Analyzing...</> : <><RefreshCw size={14} /> Run Static Analysis</>}
+                  </button>
                 </div>
               </div>
             )}
@@ -480,7 +600,7 @@ export default function AnalysisDashboard({ params }: { params: Promise<{ id: st
                 <div className="empty-state">
                   <div className="empty-state-icon"><Clock size={28} /></div>
                   <h3>No analyses yet</h3>
-                  <p>Click "Analyze" in the IDE to run your first analysis.</p>
+                  <p>Click "Run Analysis" to generate your first snapshot.</p>
                 </div>
               </div>
             ) : (

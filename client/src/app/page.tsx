@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { CreateProjectModal } from '../components/CreateProjectModal';
 import { ShareProjectModal } from '../components/ShareProjectModal';
 import Link from 'next/link';
@@ -11,7 +12,7 @@ import {
   Plus, FolderCode, Users, Clock, Code2, ArrowRight, LogOut,
   LayoutDashboard, Search, ChevronRight, Activity, ShieldCheck,
   Brain, Terminal, GitBranch, Zap, BarChart3, Play, FileCode,
-  Layers, Shield, Share2, Trash2
+  Layers, Shield, Share2, Trash2, Sun, Moon
 } from 'lucide-react';
 
 interface Project {
@@ -178,6 +179,7 @@ export default function Home() {
             <span style={{ fontWeight: 700, fontSize: 'var(--text-xl)' }}>CodeSync</span>
           </div>
           <div className="flex items-center gap-4">
+            <ThemeToggleButton />
             <Link href="/auth/login" className="btn btn-ghost">Sign in</Link>
             <Link href="/auth/register" className="btn btn-blue">Get started</Link>
           </div>
@@ -649,6 +651,20 @@ export default function Home() {
   );
 }
 
+function ThemeToggleButton() {
+  const { theme, toggleTheme } = useTheme();
+  return (
+    <button
+      className="btn-icon"
+      onClick={toggleTheme}
+      data-tooltip={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+      style={{ padding: '6px' }}
+    >
+      {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+    </button>
+  );
+}
+
 /* App Header */
 function AppHeader({ user, onLogout }: { user: any; onLogout: () => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -674,41 +690,45 @@ function AppHeader({ user, onLogout }: { user: any; onLogout: () => void }) {
         <span style={{ fontWeight: 700, fontSize: 'var(--text-lg)', color: 'var(--text-primary)' }}>CodeSync</span>
       </Link>
 
-      {user && (
-        <div className="dropdown">
-          <button
-            className="flex items-center gap-3 btn-ghost"
-            onClick={() => setMenuOpen(!menuOpen)}
-            style={{ padding: 'var(--sp-2) var(--sp-4)', borderRadius: 'var(--radius-sm)' }}
-          >
-            <div className={`avatar avatar-sm ${getAvatarColor(user.displayName)}`}>
-              {user.displayName.charAt(0)}
-            </div>
-            <span className="text-md font-medium hide-mobile">{user.displayName}</span>
-          </button>
+      <div className="flex items-center gap-3">
+        <ThemeToggleButton />
 
-          {menuOpen && (
-            <>
-              <div style={{ position: 'fixed', inset: 0, zIndex: 9 }} onClick={() => setMenuOpen(false)} />
-              <div className="dropdown-menu" style={{ zIndex: 10 }}>
-                <div style={{ padding: 'var(--sp-4) var(--sp-5)', borderBottom: '1px solid var(--border-subtle)' }}>
-                  <div className="text-md font-semibold">{user.displayName}</div>
-                  <div className="text-sm text-tertiary">{user.email}</div>
-                </div>
-                <div style={{ padding: 'var(--sp-2)' }}>
-                  <button className="dropdown-item" onClick={() => { setMenuOpen(false); }}>
-                    <LayoutDashboard size={16} /> Dashboard
-                  </button>
-                  <div className="dropdown-divider" />
-                  <button className="dropdown-item dropdown-item-danger" onClick={() => { setMenuOpen(false); onLogout(); }}>
-                    <LogOut size={16} /> Sign out
-                  </button>
-                </div>
+        {user && (
+          <div className="dropdown">
+            <button
+              className="flex items-center gap-3 btn-ghost"
+              onClick={() => setMenuOpen(!menuOpen)}
+              style={{ padding: 'var(--sp-2) var(--sp-4)', borderRadius: 'var(--radius-sm)' }}
+            >
+              <div className={`avatar avatar-sm ${getAvatarColor(user.displayName)}`}>
+                {user.displayName.charAt(0)}
               </div>
-            </>
-          )}
-        </div>
-      )}
+              <span className="text-md font-medium hide-mobile">{user.displayName}</span>
+            </button>
+
+            {menuOpen && (
+              <>
+                <div style={{ position: 'fixed', inset: 0, zIndex: 9 }} onClick={() => setMenuOpen(false)} />
+                <div className="dropdown-menu" style={{ zIndex: 10 }}>
+                  <div style={{ padding: 'var(--sp-4) var(--sp-5)', borderBottom: '1px solid var(--border-subtle)' }}>
+                    <div className="text-md font-semibold">{user.displayName}</div>
+                    <div className="text-sm text-tertiary">{user.email}</div>
+                  </div>
+                  <div style={{ padding: 'var(--sp-2)' }}>
+                    <button className="dropdown-item" onClick={() => { setMenuOpen(false); }}>
+                      <LayoutDashboard size={16} /> Dashboard
+                    </button>
+                    <div className="dropdown-divider" />
+                    <button className="dropdown-item dropdown-item-danger" onClick={() => { setMenuOpen(false); onLogout(); }}>
+                      <LogOut size={16} /> Sign out
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </header>
   );
 }

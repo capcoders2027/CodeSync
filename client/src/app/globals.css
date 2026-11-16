@@ -123,6 +123,119 @@
   --panel-max-width: 1200px;
 }
 
+[data-theme="light"] {
+  /* Background Surfaces */
+  --bg-root:        #f6f8fa;
+  --bg-primary:     #ffffff;
+  --bg-secondary:   #f6f8fa;
+  --bg-tertiary:    #eaeef2;
+  --bg-quaternary:  #e1e4e8;
+  --bg-elevated:    #ffffff;
+  --bg-overlay:     rgba(140, 149, 159, 0.4);
+  --bg-hover:       rgba(209, 217, 224, 0.28);
+  --bg-active:      rgba(209, 217, 224, 0.48);
+
+  /* Text */
+  --text-primary:   #1f2328;
+  --text-secondary: #59636e;
+  --text-tertiary:  #656d76;
+  --text-muted:     #8c959f;
+  --text-inverse:   #ffffff;
+
+  /* Borders */
+  --border-subtle:  #d0d7de;
+  --border-default: #d0d7de;
+  --border-strong:  #8c959f;
+  --border-focus:   #0969da;
+
+  /* Accent Colors */
+  --accent-blue:    #0969da;
+  --accent-blue-bg: rgba(9, 105, 218, 0.08);
+  --accent-green:   #1a7f37;
+  --accent-green-bg:rgba(26, 127, 55, 0.08);
+  --accent-red:     #cf222e;
+  --accent-red-bg:  rgba(207, 34, 46, 0.08);
+  --accent-yellow:  #9a6700;
+  --accent-yellow-bg:rgba(154, 103, 0, 0.08);
+  --accent-purple:  #8250df;
+  --accent-purple-bg:rgba(130, 80, 223, 0.08);
+  --accent-orange:  #bc4c00;
+  --accent-orange-bg:rgba(188, 76, 0, 0.08);
+  --accent-cyan:    #0598ab;
+  --accent-pink:    #bf3989;
+
+  /* Shadows */
+  --shadow-sm:   0 1px 2px rgba(31, 35, 40, 0.08);
+  --shadow-md:   0 3px 8px rgba(31, 35, 40, 0.12);
+  --shadow-lg:   0 8px 24px rgba(31, 35, 40, 0.16);
+  --shadow-xl:   0 12px 40px rgba(31, 35, 40, 0.20);
+  --shadow-overlay: 0 16px 64px rgba(31, 35, 40, 0.24);
+  --shadow-focus: 0 0 0 3px rgba(9, 105, 218, 0.3);
+}
+
+/* ----------------------------------------------------------------------------
+   Tooltips (Positioned below buttons)
+   ---------------------------------------------------------------------------- */
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  padding: 4px 8px;
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-md);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease, transform 120ms ease, visibility 120ms;
+  z-index: 1000;
+}
+
+[data-tooltip]:hover::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(8px);
+}
+
+/* ----------------------------------------------------------------------------
+   Resizable Splitters
+   ---------------------------------------------------------------------------- */
+.resizer-horizontal {
+  height: 4px;
+  cursor: row-resize;
+  background: transparent;
+  transition: background 150ms ease;
+  z-index: 10;
+  flex-shrink: 0;
+}
+.resizer-horizontal:hover, .resizer-horizontal.resizing {
+  background: var(--accent-blue);
+}
+
+.resizer-vertical {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 150ms ease;
+  z-index: 10;
+  flex-shrink: 0;
+}
+.resizer-vertical:hover, .resizer-vertical.resizing {
+  background: var(--accent-blue);
+}
+
 
 /* ----------------------------------------------------------------------------
    Reset & Base

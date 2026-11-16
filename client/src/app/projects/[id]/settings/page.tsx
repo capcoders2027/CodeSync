@@ -3,10 +3,13 @@
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '../../../../contexts/ToastContext';
+import { useTheme } from '../../../../contexts/ThemeContext';
+import { useAuth } from '../../../../contexts/AuthContext';
 import Link from 'next/link';
 import {
   ArrowLeft, Users, Trash2, Crown, UserPlus, Settings, Code2,
-  Shield, AlertTriangle, Loader, CheckCircle
+  Shield, AlertTriangle, Loader, CheckCircle, LayoutDashboard,
+  Sun, Moon, ShieldCheck, Mail, Check, ShieldAlert
 } from 'lucide-react';
 
 interface Member {
@@ -31,17 +34,147 @@ function getAvatarColor(name: string) {
   return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
 }
 
+const ROLES = [
+  { id: 'developer', name: 'Developer', desc: 'Can edit files, run code, and view analysis results' },
+  { id: 'tester', name: 'Tester', desc: 'Can run tests & executions, review quality metrics, and report defects' },
+  { id: 'team_lead', name: 'Team Lead', desc: 'Can manage members, trigger analysis, and update project settings' },
+  { id: 'member', name: 'Member', desc: 'General collaborator with editing and execution access' },
+  { id: 'viewer', name: 'Viewer', desc: 'Read-only access to source code and analysis reports' },
+];
+
 export default function ProjectSettings({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const toast = useToast();
+  const { theme, toggleTheme } = useTheme();
+  const { user, updateUser } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState('member');
+  const [inviteRole, setInviteRole] = useState('developer');
   const [loading, setLoading] = useState(true);
   const [inviting, setInviting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'members'>('general');
+  const [toggling2FA, setToggling2FA] = useState(false);
+  const [activeTab, setActiveTab] = useState<'general' | 'members' | 'security'>('general');
+
+  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+  const headers: any = { Authorization: `Bearer ${token}` };
+
+  useEffect(() => { fetchProject(); }, [id]);
+
+  const fetchProject = async () => {
+    try {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const res = await fetch(`${apiBase}/projects/${id}`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setProject(data.data.project);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInviting(true);
+
+    try {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const res = await fetch(`${apiBase}/projects/${id}/members`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: inviteEmail.trim(),
+          role: inviteRole,
+          permissions: {
+            can_trigger_analysis: inviteRole === 'team_lead',
+            can_view_analysis: true,
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        toast.success('Invitation sent!', `${inviteEmail} invited as ${inviteRole}.`);
+        setInviteEmail('');
+        fetchProject();
+      } else {
+        toast.error('Failed to invite', data.message || 'Unable to send invitation.');
+      }
+    } catch {
+      toast.error('Connection error', 'Unable to reach server.');
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const handleUpdateRole = async (userId: string, newRole: string) => {
+    try {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const res = await fetch(`${apiBase}/projects/${id}/members/${userId}`, {
+        method: 'PATCH',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: newRole }),
+      });
+
+      if (res.ok) {
+        toast.success('Role updated', `Member role changed to ${newRole}.`);
+        fetchProject();
+      } else {
+        toast.error('Failed to update role');
+      }
+    } catch {
+      toast.error('Failed to update member role');
+    }
+  };
+
+  const handleRemoveMember = async (userId: string, displayName: string) => {
+    if (!confirm(`Remove ${displayName} from this project?`)) return;
+
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/projects/${id}/members/${userId}`, {
+      method: 'DELETE',
+      headers,
+    });
+
+    if (res.ok) {
+      toast.success('Member removed', `${displayName} has been removed from the project.`);
+      fetchProject();
+    } else {
+      toast.error('Failed to remove member');
+    }
+  };
+
+  const handleToggle2FA = async () => {
+    setToggling2FA(true);
+    const nextState = !user?.twoFactorEnabled;
+
+    try {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const res = await fetch(`${apiBase}/auth/2fa/toggle`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: nextState }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        updateUser({ twoFactorEnabled: nextState });
+        toast.success(
+          nextState ? '2FA Enabled' : '2FA Disabled',
+          nextState
+            ? 'Two-Factor Authentication via email verification codes is now active.'
+            : 'Two-Factor Authentication has been turned off.'
+        );
+      } else {
+        toast.error('Failed to update 2FA', data.message || 'Error updating settings.');
+      }
+    } catch {
+      toast.error('Connection error', 'Could not reach auth server.');
+    } finally {
+      setToggling2FA(false);
+    }
+  };
 
   const handleDeleteProject = async () => {
     if (!project) return;
@@ -73,68 +206,18 @@ export default function ProjectSettings({ params }: { params: Promise<{ id: stri
     }
   };
 
-  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
-  const headers: any = { Authorization: `Bearer ${token}` };
-
-  useEffect(() => { fetchProject(); }, [id]);
-
-  const fetchProject = async () => {
-    try {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-      const res = await fetch(`${apiBase}/projects/${id}`, { headers });
-      if (res.ok) {
-        const data = await res.json();
-        setProject(data.data.project);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setInviting(true);
-
-    try {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-      const res = await fetch(`${apiBase}/projects/${id}/members`, {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: inviteEmail,
-          role: inviteRole,
-          permissions: { can_trigger_analysis: inviteRole === 'team_lead', can_view_analysis: true }
-        })
-      });
-
-      const data = await res.json();
-      if (res.ok) {
-        toast.success('Invitation sent!', `${inviteEmail} has been invited as ${inviteRole}.`);
-        setInviteEmail('');
-        fetchProject();
-      } else {
-        toast.error('Failed to invite', data.message || 'Unable to send invitation.');
-      }
-    } catch {
-      toast.error('Connection error', 'Unable to reach server.');
-    } finally {
-      setInviting(false);
-    }
-  };
-
-  const handleRemoveMember = async (userId: string, displayName: string) => {
-    if (!confirm(`Remove ${displayName} from this project?`)) return;
-
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/projects/${id}/members/${userId}`, {
-      method: 'DELETE',
-      headers,
-    });
-
-    if (res.ok) {
-      toast.success('Member removed', `${displayName} has been removed from the project.`);
-      fetchProject();
-    } else {
-      toast.error('Failed to remove member');
+  const getRoleBadge = (role: string) => {
+    switch (role) {
+      case 'team_lead':
+        return <span className="badge badge-purple flex items-center gap-1"><Crown size={10} /> Team Lead</span>;
+      case 'developer':
+        return <span className="badge badge-blue flex items-center gap-1"><Code2 size={10} /> Developer</span>;
+      case 'tester':
+        return <span className="badge badge-green flex items-center gap-1"><CheckCircle size={10} /> Tester</span>;
+      case 'viewer':
+        return <span className="badge badge-secondary flex items-center gap-1">Viewer</span>;
+      default:
+        return <span className="badge badge-yellow flex items-center gap-1">Member</span>;
     }
   };
 
@@ -157,29 +240,44 @@ export default function ProjectSettings({ params }: { params: Promise<{ id: stri
         position: 'sticky', top: 0, zIndex: 10,
       }}>
         <div className="flex items-center gap-4">
-          <Link href={`/projects/${id}`} className="btn-icon" style={{ padding: '4px' }}>
+          <Link href={`/projects/${id}`} className="btn-icon" style={{ padding: '4px' }} title="Back to Project">
             <ArrowLeft size={18} />
           </Link>
           <div className="separator-vertical" />
           <div className="flex items-center gap-3">
             <Settings size={18} style={{ color: 'var(--text-secondary)' }} />
-            <h1 style={{ fontSize: 'var(--text-xl)', margin: 0 }}>Settings</h1>
+            <h1 style={{ fontSize: 'var(--text-xl)', margin: 0 }}>Project & Team Settings</h1>
           </div>
         </div>
-        <Link href={`/projects/${id}`} className="btn btn-sm btn-secondary">
-          <Code2 size={14} /> Open IDE
-        </Link>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={toggleTheme}
+            className="btn btn-sm btn-ghost"
+            title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+          >
+            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
+          <Link href="/dashboard" className="btn btn-sm btn-ghost">
+            <LayoutDashboard size={14} /> Dashboard
+          </Link>
+          <Link href={`/projects/${id}`} className="btn btn-sm btn-secondary">
+            <Code2 size={14} /> Open IDE
+          </Link>
+        </div>
       </header>
 
-      <main style={{ maxWidth: 800, margin: '0 auto', padding: 'var(--sp-8)' }}>
+      <main style={{ maxWidth: 840, margin: '0 auto', padding: 'var(--sp-8)' }}>
         {/* Tabs */}
         <div className="tabs" style={{ marginBottom: 'var(--sp-8)' }}>
           <button className={`tab ${activeTab === 'general' ? 'tab-active' : ''}`} onClick={() => setActiveTab('general')}>
             <Settings size={14} /> General
           </button>
           <button className={`tab ${activeTab === 'members' ? 'tab-active' : ''}`} onClick={() => setActiveTab('members')}>
-            <Users size={14} /> Members
+            <Users size={14} /> Members & RBAC
             <span className="tab-count">{project.members.length}</span>
+          </button>
+          <button className={`tab ${activeTab === 'security' ? 'tab-active' : ''}`} onClick={() => setActiveTab('security')}>
+            <ShieldCheck size={14} /> Security & 2FA
           </button>
         </div>
 
@@ -188,7 +286,7 @@ export default function ProjectSettings({ params }: { params: Promise<{ id: stri
           <div className="flex flex-col gap-8 animate-in">
             <div className="card">
               <div className="card-header">
-                <h2 style={{ fontSize: 'var(--text-lg)', margin: 0 }}>Project Info</h2>
+                <h2 style={{ fontSize: 'var(--text-lg)', margin: 0 }}>Project Information</h2>
               </div>
               <div className="card-body">
                 <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 'var(--sp-5)', fontSize: 'var(--text-md)' }}>
@@ -214,14 +312,14 @@ export default function ProjectSettings({ params }: { params: Promise<{ id: stri
             {/* Quick Links */}
             <div className="card">
               <div className="card-header">
-                <h2 style={{ fontSize: 'var(--text-lg)', margin: 0 }}>Quick Links</h2>
+                <h2 style={{ fontSize: 'var(--text-lg)', margin: 0 }}>Workspace Shortcuts</h2>
               </div>
               <div className="card-body">
                 <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--sp-4)' }}>
                   {[
-                    { href: `/projects/${id}`, icon: <Code2 size={16} />, label: 'IDE' },
-                    { href: `/projects/${id}/analysis`, icon: <Shield size={16} />, label: 'Analysis' },
-                    { href: `/projects/${id}/versions`, icon: <CheckCircle size={16} />, label: 'Versions' },
+                    { href: `/projects/${id}`, icon: <Code2 size={16} />, label: 'Code Editor & IDE' },
+                    { href: `/projects/${id}/analysis`, icon: <Shield size={16} />, label: 'Analysis & Metrics' },
+                    { href: `/projects/${id}/versions`, icon: <CheckCircle size={16} />, label: 'Version History' },
                   ].map(link => (
                     <Link key={link.label} href={link.href} className="card card-interactive" style={{
                       padding: 'var(--sp-6)', textAlign: 'center', textDecoration: 'none', color: 'var(--text-secondary)',
@@ -283,7 +381,7 @@ export default function ProjectSettings({ params }: { params: Promise<{ id: stri
               <div className="card-header">
                 <div className="flex items-center gap-3">
                   <Users size={18} />
-                  <h2 style={{ fontSize: 'var(--text-lg)', margin: 0 }}>Team Members</h2>
+                  <h2 style={{ fontSize: 'var(--text-lg)', margin: 0 }}>Team Members & Roles</h2>
                 </div>
                 <span className="text-sm text-secondary">{project.members.length} member(s)</span>
               </div>
@@ -307,10 +405,29 @@ export default function ProjectSettings({ params }: { params: Promise<{ id: stri
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className={`badge ${member.role === 'team_lead' ? 'badge-purple' : 'badge-blue'}`}>
-                        {member.role === 'team_lead' && <Crown size={10} />}
-                        {member.role === 'team_lead' ? 'Team Lead' : 'Member'}
-                      </span>
+                      {/* Role selection or badge */}
+                      {member.user.id === project.owner.id ? (
+                        <span className="badge badge-purple flex items-center gap-1"><Crown size={10} /> Owner</span>
+                      ) : (
+                        <select
+                          value={member.role}
+                          onChange={(e) => handleUpdateRole(member.user.id, e.target.value)}
+                          style={{
+                            fontSize: 'var(--text-xs)',
+                            padding: '3px 8px',
+                            background: 'var(--bg-elevated)',
+                            borderRadius: 'var(--radius-sm)',
+                            border: '1px solid var(--border-subtle)',
+                          }}
+                        >
+                          {ROLES.map((r) => (
+                            <option key={r.id} value={r.id}>{r.name}</option>
+                          ))}
+                        </select>
+                      )}
+
+                      {getRoleBadge(member.role)}
+
                       {member.invitationStatus === 'pending' && (
                         <span className="badge badge-yellow">Pending</span>
                       )}
@@ -319,6 +436,7 @@ export default function ProjectSettings({ params }: { params: Promise<{ id: stri
                           className="btn-icon"
                           onClick={() => handleRemoveMember(member.user.id, member.user.displayName)}
                           style={{ color: 'var(--text-muted)' }}
+                          title="Remove member"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -334,34 +452,121 @@ export default function ProjectSettings({ params }: { params: Promise<{ id: stri
               <div className="card-header">
                 <div className="flex items-center gap-3">
                   <UserPlus size={18} />
-                  <h2 style={{ fontSize: 'var(--text-lg)', margin: 0 }}>Invite Member</h2>
+                  <h2 style={{ fontSize: 'var(--text-lg)', margin: 0 }}>Invite Team Member</h2>
                 </div>
               </div>
               <div className="card-body">
-                <form onSubmit={handleInvite} className="flex items-end gap-3">
-                  <div className="form-group flex-1">
-                    <label htmlFor="invite-email" className="form-label">Email</label>
-                    <input
-                      id="invite-email"
-                      type="email"
-                      value={inviteEmail}
-                      onChange={e => setInviteEmail(e.target.value)}
-                      required
-                      placeholder="colleague@company.com"
-                    />
+                <form onSubmit={handleInvite} className="flex flex-col gap-4">
+                  <div className="flex items-end gap-3">
+                    <div className="form-group flex-1">
+                      <label htmlFor="invite-email" className="form-label">Email Address</label>
+                      <input
+                        id="invite-email"
+                        type="email"
+                        value={inviteEmail}
+                        onChange={e => setInviteEmail(e.target.value)}
+                        required
+                        placeholder="colleague@company.com"
+                      />
+                    </div>
+                    <div className="form-group" style={{ minWidth: 160 }}>
+                      <label htmlFor="invite-role" className="form-label">Assigned Role</label>
+                      <select id="invite-role" value={inviteRole} onChange={e => setInviteRole(e.target.value)}>
+                        {ROLES.map((r) => (
+                          <option key={r.id} value={r.id}>{r.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <button type="submit" className="btn btn-primary" disabled={inviting} style={{ height: 'auto' }}>
+                      {inviting ? <Loader size={14} className="animate-spin" /> : <UserPlus size={14} />}
+                      Send Invite
+                    </button>
                   </div>
-                  <div className="form-group" style={{ minWidth: 140 }}>
-                    <label htmlFor="invite-role" className="form-label">Role</label>
-                    <select id="invite-role" value={inviteRole} onChange={e => setInviteRole(e.target.value)}>
-                      <option value="member">Member</option>
-                      <option value="team_lead">Team Lead</option>
-                    </select>
+                  <div className="text-xs text-muted" style={{ paddingLeft: '2px' }}>
+                    <strong>{ROLES.find(r => r.id === inviteRole)?.name}:</strong> {ROLES.find(r => r.id === inviteRole)?.desc}
                   </div>
-                  <button type="submit" className="btn btn-primary" disabled={inviting} style={{ height: 'auto' }}>
-                    {inviting ? <Loader size={14} className="animate-spin" /> : <UserPlus size={14} />}
-                    Send Invite
-                  </button>
                 </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Security & 2FA Tab */}
+        {activeTab === 'security' && (
+          <div className="flex flex-col gap-8 animate-in">
+            <div className="card">
+              <div className="card-header flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <ShieldCheck size={20} style={{ color: 'var(--accent-blue)' }} />
+                  <h2 style={{ fontSize: 'var(--text-lg)', margin: 0 }}>Two-Factor Authentication (2FA)</h2>
+                </div>
+                <span className={`badge ${user?.twoFactorEnabled ? 'badge-green' : 'badge-yellow'}`}>
+                  {user?.twoFactorEnabled ? 'Enabled' : 'Disabled'}
+                </span>
+              </div>
+              <div className="card-body">
+                <p className="text-sm text-secondary" style={{ lineHeight: 1.6, marginBottom: 'var(--sp-6)' }}>
+                  Two-factor authentication adds an extra layer of security to your CodeSync account. When enabled, signing in requires both your password and a temporary 6-digit verification code sent securely via Nodemailer to your email address ({user?.email}).
+                </p>
+
+                <div className="flex items-center justify-between" style={{
+                  padding: 'var(--sp-6)',
+                  background: 'var(--bg-elevated)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-subtle)',
+                }}>
+                  <div className="flex items-center gap-4">
+                    <div style={{
+                      width: 40, height: 40, borderRadius: '50%',
+                      background: user?.twoFactorEnabled ? 'rgba(34, 197, 94, 0.1)' : 'rgba(234, 179, 8, 0.1)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: user?.twoFactorEnabled ? 'var(--accent-green)' : 'var(--accent-yellow)',
+                    }}>
+                      <Mail size={20} />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-md">Email Verification Codes</div>
+                      <div className="text-xs text-secondary">
+                        {user?.twoFactorEnabled
+                          ? 'Verification codes will be required on each sign-in attempt.'
+                          : 'Turn on email-based 2FA to safeguard your source code and repositories.'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleToggle2FA}
+                    disabled={toggling2FA}
+                    className={`btn btn-sm ${user?.twoFactorEnabled ? 'btn-ghost' : 'btn-blue'}`}
+                  >
+                    {toggling2FA ? <Loader size={14} className="animate-spin" /> : (user?.twoFactorEnabled ? 'Turn Off 2FA' : 'Enable 2FA')}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-header">
+                <div className="flex items-center gap-3">
+                  <ShieldAlert size={18} />
+                  <h2 style={{ fontSize: 'var(--text-lg)', margin: 0 }}>Transactional Notifications</h2>
+                </div>
+              </div>
+              <div className="card-body">
+                <div className="flex flex-col gap-3 text-sm text-secondary">
+                  <div className="flex items-center gap-3">
+                    <Check size={16} style={{ color: 'var(--accent-green)' }} />
+                    <span>Instant alerts upon team member invitations and role changes.</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Check size={16} style={{ color: 'var(--accent-green)' }} />
+                    <span>Security notifications for password reset requests and 2FA changes.</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Check size={16} style={{ color: 'var(--accent-green)' }} />
+                    <span>Expiring secure tokens with cryptographic hashing protection.</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

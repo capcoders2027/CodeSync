@@ -9,6 +9,7 @@ interface User {
   displayName: string;
   emailVerified: boolean;
   avatarUrl?: string;
+  twoFactorEnabled?: boolean;
 }
 
 interface AuthContextType {
@@ -17,6 +18,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (accessToken: string, user: User) => void;
   logout: () => void;
+  updateUser: (updatedUser: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -25,6 +27,7 @@ const AuthContext = createContext<AuthContextType>({
   isLoading: true,
   login: () => {},
   logout: () => {},
+  updateUser: () => {},
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -78,8 +81,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     router.push('/auth/login');
   };
 
+  const updateUser = (updatedFields: Partial<User>) => {
+    setUser((prev) => (prev ? { ...prev, ...updatedFields } : null));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

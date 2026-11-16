@@ -163,51 +163,43 @@ export function Terminal({ visible }: TerminalProps) {
     connect();
   }, [connect]);
 
-  if (!visible) return null;
-
   return (
     <div style={{
-      display: 'flex',
+      display: visible ? 'flex' : 'none',
       flexDirection: 'column',
       height: '100%',
       backgroundColor: '#0d1117',
+      position: 'relative',
     }}>
-      {/* Terminal Header */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '0 var(--sp-5)',
-        height: 28,
-        minHeight: 28,
-        borderBottom: '1px solid var(--border-subtle)',
-        backgroundColor: 'var(--bg-secondary)',
-        fontSize: 'var(--text-xs)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)' }}>
-          <span style={{
-            width: 7, height: 7, borderRadius: '50%',
-            backgroundColor: connected ? 'var(--accent-green)' : 'var(--accent-red)',
-          }} />
-          <span style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-            TERMINAL
-          </span>
+      {/* Terminal Reconnect banner if disconnected */}
+      {!connected && (
+        <div style={{
+          position: 'absolute',
+          top: 6,
+          right: 12,
+          zIndex: 10,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          background: 'rgba(248, 81, 73, 0.15)',
+          border: '1px solid rgba(248, 81, 73, 0.4)',
+          borderRadius: 4,
+          padding: '2px 8px',
+        }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'var(--accent-red)' }} />
+          <span style={{ color: 'var(--accent-red)', fontSize: 11, fontFamily: 'var(--font-mono)' }}>Disconnected</span>
+          <button
+            onClick={handleReconnect}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--accent-blue)', fontSize: 11, fontFamily: 'var(--font-mono)',
+              textDecoration: 'underline', padding: 0, marginLeft: 4,
+            }}
+          >
+            Reconnect
+          </button>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
-          {!connected && (
-            <button
-              onClick={handleReconnect}
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: 'var(--accent-blue)', fontSize: 'var(--text-xs)',
-                fontFamily: 'var(--font-mono)',
-              }}
-            >
-              Reconnect
-            </button>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* Terminal Body */}
       <div
