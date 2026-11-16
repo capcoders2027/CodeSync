@@ -114,7 +114,7 @@ export default function VersionsPage({ params }: { params: Promise<{ id: string 
           >
             {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
           </button>
-          <Link href="/dashboard" className="btn btn-sm btn-ghost">
+          <Link href="/" className="btn btn-sm btn-ghost">
             <LayoutDashboard size={14} /> Dashboard
           </Link>
           <Link href={`/projects/${id}`} className="btn btn-sm btn-secondary">

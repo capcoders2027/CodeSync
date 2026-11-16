@@ -485,46 +485,91 @@ authRouter.post('/2fa/toggle', requireAuth, async (req, res, next) => {
 // ---------------------------------------------------------------------------
 // GET /api/auth/google
 // ---------------------------------------------------------------------------
-authRouter.get('/google', (req, res) => {
-  const redirectUri = env.GOOGLE_CALLBACK_URL || `${req.protocol}://${req.get('host')}/api/auth/google/callback`;
+authRouter.get('/google', async (req, res, next) => {
+  try {
+    const redirectUri = env.GOOGLE_CALLBACK_URL || `${req.protocol}://${req.get('host')}/api/auth/google/callback`;
 
-  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
-    return res.send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Google Sign-In - CodeSync</title>
-        <style>
-          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0d1117; color: #e6edf3; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-          .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 32px; max-width: 400px; width: 100%; text-align: center; }
-          .btn { display: inline-block; background: #238636; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 600; margin-top: 16px; border: none; cursor: pointer; width: 100%; }
-          .input { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #30363d; border-radius: 6px; background: #0d1117; color: #fff; box-sizing: border-box; font-size: 14px; }
-        </style>
-      </head>
-      <body>
-        <div class="card">
-          <h2 style="color: #58a6ff; margin-top: 0;">Google Authentication</h2>
-          <p style="color: #8b949e; font-size: 13px;">Fast sign-in simulation (Google credentials not set in environment). Enter your Google email to sign in:</p>
-          <form method="POST" action="/api/auth/google/mock">
-            <input class="input" type="email" name="email" placeholder="google-user@example.com" value="developer@codesync.dev" required />
-            <input class="input" type="text" name="displayName" placeholder="Google User" value="Google Developer" required />
-            <button class="btn" type="submit">Continue with Google Account</button>
-          </form>
-        </div>
-      </body>
-      </html>
-    `);
+    if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+      // Development / test Google Sign-in: instant verified sign-in
+      const email = (req.query.email as string) || 'developer@codesync.dev';
+      const displayName = (req.query.name as string) || 'Google Developer';
+
+      let user = await prisma.user.findUnique({ where: { email } });
+      if (!user) {
+        user = await prisma.user.create({
+          data: {
+            email,
+            displayName,
+            passwordHash: 'GOOGLE_OAUTH_USER',
+            emailVerified: true,
+            googleId: `google_dev_${Date.now()}`,
+          },
+        });
+      } else if (!user.googleId) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { googleId: `google_dev_${Date.now()}`, emailVerified: true },
+        });
+      }
+
+      const { accessToken, refreshToken } = generateTokens(user.id);
+
+      res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+
+      const userPayload = {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        emailVerified: user.emailVerified,
+        avatarUrl: user.avatarUrl,
+      };
+
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head><title>Google Sign-In - CodeSync</title></head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0d1117; color: #c9d1d9; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
+          <div style="text-align: center; background: #161b22; padding: 32px 48px; border-radius: 12px; border: 1px solid #30363d;">
+            <div style="width: 24px; height: 24px; border: 3px solid #58a6ff; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px;"></div>
+            <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+            <h3 style="color: #58a6ff; margin: 0 0 8px;">Signed in with Google</h3>
+            <p style="color: #8b949e; font-size: 14px; margin: 0;">Redirecting to your CodeSync workspace...</p>
+          </div>
+          <script>
+            const authPayload = {
+              type: 'GOOGLE_AUTH_SUCCESS',
+              accessToken: "${accessToken}",
+              user: ${JSON.stringify(userPayload)}
+            };
+            if (window.opener && !window.opener.closed) {
+              window.opener.postMessage(authPayload, '*');
+              setTimeout(() => window.close(), 300);
+            } else {
+              window.location.href = "${env.FRONTEND_URL}/auth/google/callback?token=${accessToken}&user=${encodeURIComponent(JSON.stringify(userPayload))}";
+            }
+          </script>
+        </body>
+        </html>
+      `);
+    }
+
+    const googleAuthUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' +
+      `client_id=${encodeURIComponent(env.GOOGLE_CLIENT_ID)}` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+      `&response_type=code` +
+      `&scope=${encodeURIComponent('openid email profile')}` +
+      `&access_type=offline` +
+      `&prompt=select_account`;
+
+    res.redirect(googleAuthUrl);
+  } catch (error) {
+    next(error);
   }
-
-  const googleAuthUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' +
-    `client_id=${encodeURIComponent(env.GOOGLE_CLIENT_ID)}` +
-    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-    `&response_type=code` +
-    `&scope=${encodeURIComponent('openid email profile')}` +
-    `&access_type=offline` +
-    `&prompt=select_account`;
-
-  res.redirect(googleAuthUrl);
 });
 
 // ---------------------------------------------------------------------------
@@ -562,23 +607,32 @@ authRouter.post('/google/mock', async (req, res, next) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
+    const userPayload = {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      emailVerified: user.emailVerified,
+      avatarUrl: user.avatarUrl,
+    };
+
     res.send(`
       <!DOCTYPE html>
       <html>
       <body>
         <script>
-          if (window.opener) {
-            window.opener.postMessage({
-              type: 'GOOGLE_AUTH_SUCCESS',
-              accessToken: "${accessToken}",
-              user: ${JSON.stringify({ id: user.id, email: user.email, displayName: user.displayName, emailVerified: user.emailVerified })}
-            }, '*');
-            window.close();
+          const authPayload = {
+            type: 'GOOGLE_AUTH_SUCCESS',
+            accessToken: "${accessToken}",
+            user: ${JSON.stringify(userPayload)}
+          };
+          if (window.opener && !window.opener.closed) {
+            window.opener.postMessage(authPayload, '*');
+            setTimeout(() => window.close(), 300);
           } else {
-            window.location.href = "${env.FRONTEND_URL}/?token=${accessToken}";
+            window.location.href = "${env.FRONTEND_URL}/auth/google/callback?token=${accessToken}&user=${encodeURIComponent(JSON.stringify(userPayload))}";
           }
         </script>
-        <p>Authentication successful. You can close this window.</p>
+        <p>Authentication successful. Redirecting...</p>
       </body>
       </html>
     `);
@@ -672,15 +726,15 @@ authRouter.get('/google/callback', async (req, res, next) => {
       <html>
       <body>
         <script>
-          if (window.opener) {
+          if (window.opener && !window.opener.closed) {
             window.opener.postMessage({
               type: 'GOOGLE_AUTH_SUCCESS',
               accessToken: "${accessToken}",
               user: ${JSON.stringify({ id: user.id, email: user.email, displayName: user.displayName, emailVerified: user.emailVerified, avatarUrl: user.avatarUrl })}
             }, '*');
-            window.close();
+            setTimeout(() => window.close(), 300);
           } else {
-            window.location.href = "${env.FRONTEND_URL}/?token=${accessToken}";
+            window.location.href = "${env.FRONTEND_URL}/auth/google/callback?token=${accessToken}&user=${encodeURIComponent(JSON.stringify({ id: user.id, email: user.email, displayName: user.displayName, emailVerified: user.emailVerified, avatarUrl: user.avatarUrl }))}";
           }
         </script>
         <p>Authentication successful. Redirecting...</p>

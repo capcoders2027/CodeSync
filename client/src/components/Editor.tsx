@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import MonacoEditor from '@monaco-editor/react';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
-import { Wifi, WifiOff, Loader, Users } from 'lucide-react';
+import { Wifi, WifiOff, Loader, Users, Image as ImageIcon } from 'lucide-react';
 
 interface EditorProps {
   projectId: string;
@@ -24,6 +24,30 @@ export function Editor({ projectId, fileId, fileName }: EditorProps) {
   const ytextRef = useRef<Y.Text | null>(null);
   const isApplyingRemote = useRef(false);
   const currentFileIdRef = useRef<string>(fileId);
+
+  // Check if current file is an image
+  const isImageFile = /\.(png|jpe?g|gif|svg|webp|ico|bmp)$/i.test(fileName);
+  const [imageContent, setImageContent] = useState<string | null>(null);
+  const [imageLoading, setImageLoading] = useState(false);
+
+  useEffect(() => {
+    if (isImageFile) {
+      setImageLoading(true);
+      const token = localStorage.getItem('accessToken');
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      fetch(`${apiBase}/projects/${projectId}/files/${fileId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.data?.file?.content) {
+            setImageContent(data.data.file.content);
+          }
+        })
+        .catch(() => {})
+        .finally(() => setImageLoading(false));
+    }
+  }, [fileId, isImageFile, projectId]);
 
   const getLanguage = (name: string) => {
     const map: Record<string, string> = {
@@ -59,7 +83,7 @@ export function Editor({ projectId, fileId, fileName }: EditorProps) {
   }, []);
 
   const setupYjs = useCallback((editor: any, fId: string) => {
-    if (!editor) return;
+    if (!editor || isImageFile) return;
     cleanup();
 
     const model = editor.getModel();
@@ -70,7 +94,6 @@ export function Editor({ projectId, fileId, fileName }: EditorProps) {
     currentFileIdRef.current = fId;
 
     const token = localStorage.getItem('accessToken');
-    // Derive WS URL from the API URL env var (http->ws, https->wss)
     const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
     const wsBase = apiBase.replace(/^http/, 'ws').replace(/\/api$/, '');
     const provider = new WebsocketProvider(
@@ -103,15 +126,14 @@ export function Editor({ projectId, fileId, fileName }: EditorProps) {
     ytext.observe(yObserver);
 
     // Monaco -> Yjs
-    const disposable = model.onDidChangeContent((event: any) => {
-      if (currentFileIdRef.current !== fId) return;
+    const disposable = editor.onDidChangeModelContent((event: any) => {
       if (isApplyingRemote.current) return;
       isApplyingRemote.current = true;
       try {
         ydoc.transact(() => {
           for (const change of event.changes) {
-            if (change.rangeLength > 0) ytext.delete(change.rangeOffset, change.rangeLength);
-            if (change.text) ytext.insert(change.rangeOffset, change.text);
+            ytext.delete(change.rangeOffset, change.rangeLength);
+            ytext.insert(change.rangeOffset, change.text);
           }
         });
       } finally {
@@ -120,67 +142,54 @@ export function Editor({ projectId, fileId, fileName }: EditorProps) {
     });
     disposableRef.current = disposable;
 
-    // Connection events
-    provider.on('status', (event: { status: string }) => {
-      if (currentFileIdRef.current !== fId) return;
-      setConnectionStatus(event.status as any);
+    provider.on('status', (event: { status: 'connecting' | 'connected' | 'disconnected' }) => {
+      setConnectionStatus(event.status);
     });
 
-    provider.on('sync', (isSynced: boolean) => {
-      if (!isSynced || currentFileIdRef.current !== fId) return;
-      isApplyingRemote.current = true;
-      try {
-        const content = ytext.toString();
-        if (model.getValue() !== content) model.setValue(content);
-      } finally {
-        isApplyingRemote.current = false;
-      }
+    provider.awareness.on('change', () => {
+      setConnectedUsers(provider.awareness.getStates().size);
     });
+  }, [cleanup, projectId, isImageFile]);
 
-    // Track awareness (connected users)
-    const awareness = provider.awareness;
-    awareness.setLocalState({ user: { name: 'User', color: '#58a6ff' } });
-    const awarenessHandler = () => {
-      if (currentFileIdRef.current !== fId) return;
-      setConnectedUsers(awareness.getStates().size);
-    };
-    awareness.on('change', awarenessHandler);
-    awarenessHandler();
-  }, [projectId, cleanup]);
-
-  const handleEditorDidMount = useCallback((editor: any, monaco: any) => {
+  const handleEditorDidMount = (editor: any, monaco: any) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
 
-    // Custom theme
     monaco.editor.defineTheme('codesync-dark', {
       base: 'vs-dark',
       inherit: true,
-      rules: [],
+      rules: [
+        { token: 'comment', foreground: '6e7681', fontStyle: 'italic' },
+        { token: 'keyword', foreground: 'ff7b72' },
+        { token: 'string', foreground: 'a5d6ff' },
+        { token: 'number', foreground: '79c0ff' },
+        { token: 'type', foreground: 'ffa657' },
+        { token: 'function', foreground: 'd2a8ff' },
+        { token: 'variable', foreground: 'c9d1d9' },
+      ],
       colors: {
-        'editor.background': '#0d1117',
-        'editor.foreground': '#e6edf3',
+        'editor.background': '#0f141c',
+        'editor.foreground': '#c9d1d9',
+        'editor.lineHighlightBackground': '#161b22',
+        'editor.selectionBackground': '#264f78',
+        'editorCursor.foreground': '#58a6ff',
         'editorLineNumber.foreground': '#484f58',
         'editorLineNumber.activeForeground': '#8b949e',
-        'editor.selectionBackground': '#264f78',
-        'editor.lineHighlightBackground': '#161b22',
-        'editorCursor.foreground': '#58a6ff',
         'editorIndentGuide.background': '#21262d',
         'editorIndentGuide.activeBackground': '#30363d',
       },
     });
-    monaco.editor.setTheme('codesync-dark');
 
+    monaco.editor.setTheme('codesync-dark');
     setupYjs(editor, fileId);
-  }, [fileId, setupYjs]);
+  };
 
   useEffect(() => {
-    if (editorRef.current) {
-      setConnectionStatus('connecting');
+    if (editorRef.current && !isImageFile) {
       setupYjs(editorRef.current, fileId);
     }
     return () => cleanup();
-  }, [fileId]);
+  }, [fileId, isImageFile, setupYjs, cleanup]);
 
   const statusConfig = {
     connecting: { icon: <Loader size={12} className="animate-spin" />, label: 'Connecting', color: 'var(--accent-yellow)' },
@@ -189,6 +198,78 @@ export function Editor({ projectId, fileId, fileName }: EditorProps) {
   };
 
   const status = statusConfig[connectionStatus];
+
+  if (isImageFile) {
+    return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-root)' }}>
+        {/* Editor Tab Bar */}
+        <div className="flex items-center justify-between" style={{
+          height: 36,
+          padding: '0 var(--sp-5)',
+          backgroundColor: 'var(--bg-secondary)',
+          borderBottom: '1px solid var(--border-subtle)',
+        }}>
+          <div className="flex items-center gap-2">
+            <ImageIcon size={14} style={{ color: 'var(--accent-cyan)' }} />
+            <span style={{
+              fontSize: 'var(--text-sm)',
+              fontFamily: 'var(--font-mono)',
+              color: 'var(--text-primary)',
+              padding: '2px 8px',
+              backgroundColor: 'var(--bg-tertiary)',
+              borderRadius: 'var(--radius-xs)',
+            }}>
+              {fileName}
+            </span>
+          </div>
+          <span className="badge badge-secondary" style={{ fontSize: '11px' }}>Image Asset</span>
+        </div>
+
+        {/* Visual Image Preview */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', overflow: 'auto' }}>
+          {imageLoading ? (
+            <div className="flex items-center gap-2 text-secondary">
+              <Loader size={16} className="animate-spin" />
+              <span>Loading image...</span>
+            </div>
+          ) : imageContent ? (
+            <div style={{
+              background: 'var(--bg-elevated)',
+              border: '1px solid var(--border-default)',
+              borderRadius: '8px',
+              padding: '20px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '14px',
+              maxWidth: '90%',
+              maxHeight: '90%',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+            }}>
+              <img
+                src={imageContent}
+                alt={fileName}
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '65vh',
+                  objectFit: 'contain',
+                  borderRadius: '4px',
+                  background: 'repeating-conic-gradient(#80808020 0% 25%, transparent 0% 50%) 50% / 16px 16px',
+                }}
+              />
+              <div className="flex items-center gap-3 text-xs text-muted">
+                <span>{fileName}</span>
+                <span>•</span>
+                <span>Visual Image Preview</span>
+              </div>
+            </div>
+          ) : (
+            <div className="text-secondary text-sm">Image preview unavailable</div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>

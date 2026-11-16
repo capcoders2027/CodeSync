@@ -11,7 +11,7 @@ export const filesRouter = Router({ mergeParams: true });
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB limit per file
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit per file
 });
 
 // Validation Schemas
@@ -252,9 +252,24 @@ filesRouter.post('/upload', upload.array('files', 100), async (req, res, next) =
 
       // Leaf file
       const originalFileName = segments[segments.length - 1] || uploadFile.originalname;
-      let finalFileName = originalFileName;
+      const finalFileName = originalFileName;
 
-      // Handle duplicate names
+      const ext = path.extname(originalFileName).toLowerCase();
+      const isImage = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico', '.bmp'].includes(ext) || (uploadFile.mimetype && uploadFile.mimetype.startsWith('image/'));
+      const isBinary = isImage || ['.pdf', '.zip', '.tar', '.gz', '.woff', '.woff2', '.ttf', '.eot', '.mp4', '.mp3'].includes(ext);
+
+      let fileContent: string;
+      if (isImage) {
+        const mime = uploadFile.mimetype || (ext === '.svg' ? 'image/svg+xml' : `image/${ext.replace('.', '')}`);
+        fileContent = `data:${mime};base64,${uploadFile.buffer.toString('base64')}`;
+      } else if (isBinary) {
+        fileContent = `data:${uploadFile.mimetype || 'application/octet-stream'};base64,${uploadFile.buffer.toString('base64')}`;
+      } else {
+        // Text / code file - sanitize null bytes for PostgreSQL text column compatibility
+        fileContent = uploadFile.buffer.toString('utf8').replace(/\0/g, '');
+      }
+
+      // Check for existing file in the destination folder
       const existingFile = await prisma.file.findFirst({
         where: {
           projectId,
@@ -263,40 +278,31 @@ filesRouter.post('/upload', upload.array('files', 100), async (req, res, next) =
         },
       });
 
-      const fileContent = uploadFile.buffer.toString('utf8');
-
       if (existingFile) {
-        // If overwrite requested or rename
-        if (req.body.overwrite === 'true' || req.body.overwrite === true) {
-          const updated = await prisma.file.update({
-            where: { id: existingFile.id },
-            data: {
-              content: fileContent,
-              sizeBytes: uploadFile.size,
-            },
-          });
-          createdFiles.push(updated);
-          continue;
-        } else {
-          // Append timestamp / suffix to avoid conflict
-          const ext = path.extname(originalFileName);
-          const base = path.basename(originalFileName, ext);
-          finalFileName = `${base}_${Date.now().toString().slice(-4)}${ext}`;
-        }
+        const updated = await prisma.file.update({
+          where: { id: existingFile.id },
+          data: {
+            content: fileContent,
+            sizeBytes: uploadFile.size,
+            mimeType: uploadFile.mimetype || (isImage ? 'image/png' : 'text/plain'),
+            updatedAt: new Date(),
+          },
+        });
+        createdFiles.push(updated);
+      } else {
+        const created = await prisma.file.create({
+          data: {
+            projectId,
+            parentId: currentParentId,
+            name: finalFileName,
+            type: 'file',
+            content: fileContent,
+            sizeBytes: uploadFile.size,
+            mimeType: uploadFile.mimetype || (isImage ? 'image/png' : 'text/plain'),
+          },
+        });
+        createdFiles.push(created);
       }
-
-      const created = await prisma.file.create({
-        data: {
-          projectId,
-          parentId: currentParentId,
-          name: finalFileName,
-          type: 'file',
-          content: fileContent,
-          sizeBytes: uploadFile.size,
-        },
-      });
-
-      createdFiles.push(created);
     }
 
     // Touch project updatedAt

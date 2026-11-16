@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   FileCode, Folder, FolderOpen, ChevronRight, ChevronDown,
-  Plus, Trash2, FilePlus, FolderPlus, Upload, Loader2
+  Plus, Trash2, FilePlus, FolderPlus, Upload, Loader2, FolderUp, Image as ImageIcon
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 
@@ -32,6 +32,13 @@ const FILE_ICONS: Record<string, { color: string }> = {
   '.html': { color: '#e34c26' },
   '.css':  { color: '#563d7c' },
   '.java': { color: '#b07219' },
+  '.png':  { color: '#00d8ff' },
+  '.jpg':  { color: '#00d8ff' },
+  '.jpeg': { color: '#00d8ff' },
+  '.gif':  { color: '#00d8ff' },
+  '.svg':  { color: '#00d8ff' },
+  '.webp': { color: '#00d8ff' },
+  '.ico':  { color: '#00d8ff' },
 };
 
 function getFileColor(name: string) {
@@ -283,7 +290,9 @@ export function FileTree({ projectId, onSelectFile, activeFileId, width = 250 }:
                     ? <FolderOpen size={14} style={{ color: 'var(--accent-blue)' }} />
                     : <Folder size={14} style={{ color: 'var(--accent-blue)' }} />
                   )
-                : <FileCode size={14} style={{ color: getFileColor(file.name) }} />
+                : /\.(png|jpe?g|gif|svg|webp|ico|bmp)$/i.test(file.name)
+                  ? <ImageIcon size={14} style={{ color: 'var(--accent-cyan)' }} />
+                  : <FileCode size={14} style={{ color: getFileColor(file.name) }} />
               }
             </span>
 
@@ -432,6 +441,15 @@ export function FileTree({ projectId, onSelectFile, activeFileId, width = 250 }:
             disabled={isUploading}
           >
             {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+          </button>
+          <button
+            className="btn-icon"
+            onClick={() => folderInputRef.current?.click()}
+            data-tooltip="Upload folder"
+            style={{ padding: '3px' }}
+            disabled={isUploading}
+          >
+            <FolderUp size={14} />
           </button>
         </div>
       </div>

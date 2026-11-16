@@ -27,7 +27,7 @@ function GoogleCallbackContent() {
         const user = JSON.parse(decodeURIComponent(userParam));
         login(token, user);
         toast.success('Signed in with Google', `Welcome back, ${user.displayName || user.email}!`);
-        router.push('/dashboard');
+        router.push('/');
       } catch (e) {
         toast.error('Authentication error', 'Failed to parse user profile.');
         router.push('/auth/login');

@@ -153,6 +153,18 @@ export default function Home() {
   };
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tokenFromUrl = urlParams.get('token');
+      if (tokenFromUrl) {
+        localStorage.setItem('accessToken', tokenFromUrl);
+        window.history.replaceState({}, document.title, window.location.pathname);
+        window.location.reload();
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     if (user) fetchProjects();
     else if (!isLoading) setLoading(false);
   }, [user, isLoading]);

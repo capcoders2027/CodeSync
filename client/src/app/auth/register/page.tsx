@@ -51,37 +51,36 @@ export default function RegisterPage() {
     }
   };
 
-  const handleGoogleSignUp = async () => {
+  const handleGoogleSignUp = () => {
     setGoogleLoading(true);
     setError('');
-    try {
-      const testRes = await fetch(`${API_URL}/auth/google`, { method: 'GET', redirect: 'manual' });
-      if (testRes.type === 'opaqueredirect' || testRes.status === 302 || testRes.status === 200) {
-        window.location.href = `${API_URL}/auth/google`;
-        return;
-      }
 
-      // Dev fallback
-      const mockRes = await fetch(`${API_URL}/auth/google/mock`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: email.trim() || 'demo.google.user@example.com',
-          displayName: displayName.trim() || 'Google User',
-          googleId: 'google-dev-' + Date.now(),
-        }),
-      });
-      const mockData = await mockRes.json();
-      if (mockRes.ok) {
-        toast.success('Account created with Google', `Welcome ${mockData.data.user.displayName}`);
-        login(mockData.data.accessToken, mockData.data.user);
-      } else {
-        window.location.href = `${API_URL}/auth/google`;
+    const handleAuthMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
+        window.removeEventListener('message', handleAuthMessage);
+        login(event.data.accessToken, event.data.user);
+        toast.success('Signed in with Google', `Welcome back, ${event.data.user.displayName}!`);
+        window.location.href = '/';
+      } else if (event.data?.type === 'GOOGLE_AUTH_ERROR') {
+        window.removeEventListener('message', handleAuthMessage);
+        setError(event.data.message || 'Google authentication failed.');
+        setGoogleLoading(false);
       }
-    } catch {
+    };
+    window.addEventListener('message', handleAuthMessage);
+
+    const width = 500;
+    const height = 620;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+    const popup = window.open(
+      `${API_URL}/auth/google`,
+      'google_auth',
+      `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes`
+    );
+
+    if (!popup || popup.closed || typeof popup.closed === 'undefined') {
       window.location.href = `${API_URL}/auth/google`;
-    } finally {
-      setGoogleLoading(false);
     }
   };
 
