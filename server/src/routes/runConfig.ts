@@ -123,29 +123,54 @@ runConfigRouter.post('/run', async (req, res, next) => {
       });
     }
 
-    // Fetch all files
-    const allFiles = await prisma.file.findMany({
-      where: { projectId, type: 'file' },
-      select: { id: true, name: true, content: true },
+    // Fetch all items to reconstruct full paths (e.g. templates/base.html)
+    const allItems = await prisma.file.findMany({
+      where: { projectId },
+      select: { id: true, name: true, type: true, parentId: true, content: true },
     });
+
+    const fileMap = new Map(allItems.map(f => [f.id, f]));
+    const getRelativePath = (item: any): string => {
+      let curr = item;
+      const parts = [curr.name];
+      while (curr.parentId && fileMap.has(curr.parentId)) {
+        curr = fileMap.get(curr.parentId)!;
+        parts.unshift(curr.name);
+      }
+      return parts.join('/');
+    };
+
+    const filesToExecute = allItems
+      .filter(item => item.type === 'file')
+      .map(item => ({
+        name: getRelativePath(item),
+        content: item.content,
+      }));
 
     // Determine entry file from command for the existing execution engine
     let entryFileName = extractEntryFile(config.entryCommand, config.projectType);
 
-    // If no specific entry file found, try to find common entry points
     if (!entryFileName) {
-      entryFileName = findDefaultEntryFile(allFiles.map(f => f.name), project.language);
+      entryFileName = findDefaultEntryFile(filesToExecute.map(f => f.name), project.language);
+    }
+
+    // Match entry file within hierarchy if nested (e.g. student_management_system/app.py)
+    if (entryFileName) {
+      const match = filesToExecute.find(f => f.name === entryFileName || f.name.endsWith('/' + entryFileName));
+      if (match) {
+        entryFileName = match.name;
+      }
     }
 
     if (!entryFileName) {
       throw new AppError(400, 'Could not determine entry file. Please configure a run command.', 'NO_ENTRY_FILE');
     }
 
-    // Execute using existing Docker sandbox
+    // Execute
     const startTime = Date.now();
     let result;
     try {
-      result = await executeCode(project.language, allFiles, entryFileName);
+      result = await executeCode(project.language, filesToExecute, entryFileName);
     } catch (err: any) {
       throw new AppError(500, `Execution engine failure: ${err.message}`, 'EXEC_ENGINE_FAILURE');
     }

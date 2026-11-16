@@ -5,6 +5,7 @@ import MonacoEditor from '@monaco-editor/react';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { Wifi, WifiOff, Loader, Users, Image as ImageIcon } from 'lucide-react';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface EditorProps {
   projectId: string;
@@ -13,6 +14,7 @@ interface EditorProps {
 }
 
 export function Editor({ projectId, fileId, fileName }: EditorProps) {
+  const { theme } = useTheme();
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
   const [connectedUsers, setConnectedUsers] = useState(0);
   const editorRef = useRef<any>(null);
@@ -180,9 +182,41 @@ export function Editor({ projectId, fileId, fileName }: EditorProps) {
       },
     });
 
-    monaco.editor.setTheme('codesync-dark');
+    monaco.editor.defineTheme('codesync-light', {
+      base: 'vs',
+      inherit: true,
+      rules: [
+        { token: 'comment', foreground: '656d76', fontStyle: 'italic' },
+        { token: 'keyword', foreground: 'cf222e' },
+        { token: 'string', foreground: '0a3069' },
+        { token: 'number', foreground: '0550ae' },
+        { token: 'type', foreground: '953800' },
+        { token: 'function', foreground: '8250df' },
+        { token: 'variable', foreground: '1f2328' },
+      ],
+      colors: {
+        'editor.background': '#ffffff',
+        'editor.foreground': '#1f2328',
+        'editor.lineHighlightBackground': '#f6f8fa',
+        'editor.selectionBackground': '#b4d5fe',
+        'editorCursor.foreground': '#0969da',
+        'editorLineNumber.foreground': '#8c959f',
+        'editorLineNumber.activeForeground': '#1f2328',
+        'editorIndentGuide.background': '#d8dee4',
+        'editorIndentGuide.activeBackground': '#afb8c1',
+      },
+    });
+
+    monaco.editor.setTheme(theme === 'dark' ? 'codesync-dark' : 'codesync-light');
     setupYjs(editor, fileId);
   };
+
+  // Sync Monaco editor theme with active application theme
+  useEffect(() => {
+    if (monacoRef.current) {
+      monacoRef.current.editor.setTheme(theme === 'dark' ? 'codesync-dark' : 'codesync-light');
+    }
+  }, [theme]);
 
   useEffect(() => {
     if (editorRef.current && !isImageFile) {
@@ -273,21 +307,19 @@ export function Editor({ projectId, fileId, fileName }: EditorProps) {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Editor Tab Bar */}
+      {/* Editor Sub-Bar / Status Header */}
       <div className="flex items-center justify-between" style={{
-        height: 36,
-        padding: '0 var(--sp-5)',
+        height: 28,
+        padding: '0 var(--sp-4)',
         backgroundColor: 'var(--bg-secondary)',
         borderBottom: '1px solid var(--border-subtle)',
       }}>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <span style={{
-            fontSize: 'var(--text-sm)',
+            fontSize: 'var(--text-xs)',
             fontFamily: 'var(--font-mono)',
-            color: 'var(--text-primary)',
-            padding: '2px 8px',
-            backgroundColor: 'var(--bg-tertiary)',
-            borderRadius: 'var(--radius-xs)',
+            color: 'var(--text-secondary)',
+            fontWeight: 500,
           }}>
             {fileName}
           </span>
@@ -296,14 +328,14 @@ export function Editor({ projectId, fileId, fileName }: EditorProps) {
         <div className="flex items-center gap-4">
           {/* Connected users */}
           {connectedUsers > 1 && (
-            <div className="flex items-center gap-2" style={{ fontSize: 'var(--text-sm)', color: 'var(--accent-blue)' }}>
+            <div className="flex items-center gap-1.5" style={{ fontSize: 'var(--text-xs)', color: 'var(--accent-blue)' }}>
               <Users size={12} />
               <span>{connectedUsers} online</span>
             </div>
           )}
 
           {/* Connection status */}
-          <div className="flex items-center gap-2" style={{ fontSize: 'var(--text-xs)', color: status.color }}>
+          <div className="flex items-center gap-1.5" style={{ fontSize: 'var(--text-xs)', color: status.color }}>
             {status.icon}
             <span>{status.label}</span>
           </div>
@@ -316,7 +348,7 @@ export function Editor({ projectId, fileId, fileName }: EditorProps) {
           key={fileId}
           height="100%"
           language={getLanguage(fileName)}
-          theme="codesync-dark"
+          theme={theme === 'dark' ? 'codesync-dark' : 'codesync-light'}
           options={{
             minimap: { enabled: false },
             fontSize: 14,

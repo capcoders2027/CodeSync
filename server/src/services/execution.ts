@@ -1,4 +1,4 @@
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs/promises';
 import path from 'path';
@@ -35,6 +35,111 @@ const getRunCommand = (language: string, entryFile: string): string => {
       throw new Error(`Unsupported language: ${language}`);
   }
 };
+
+/**
+ * Direct process execution on the host machine.
+ * Detects long-running web servers (Flask, Express, FastAPI) and captures startup status.
+ */
+function runDirectProcess(
+  language: string,
+  targetDir: string,
+  targetFile: string,
+  startTime: number
+): Promise<ExecutionResult> {
+  return new Promise((resolve) => {
+    let cmd = language === 'python'
+      ? (process.platform === 'win32' ? 'python' : 'python3')
+      : (language === 'java' ? 'java' : 'node');
+
+    const child = spawn(cmd, [targetFile], {
+      cwd: targetDir,
+      env: {
+        ...process.env,
+        PYTHONUNBUFFERED: '1',
+        PATH: `C:\\Program Files\\nodejs;${process.env.PATH || ''}`,
+      },
+      shell: true,
+    });
+
+    let stdout = '';
+    let stderr = '';
+    let resolved = false;
+    let timer: NodeJS.Timeout | null = null;
+
+    const cleanupAndResolve = (result: ExecutionResult) => {
+      if (resolved) return;
+      resolved = true;
+      if (timer) clearTimeout(timer);
+      try { child.kill(); } catch {}
+      resolve(result);
+    };
+
+    // 30s timeout guard
+    timer = setTimeout(() => {
+      cleanupAndResolve({
+        stdout,
+        stderr: stderr ? `${stderr}\nExecution timed out (30s limit exceeded)` : 'Execution timed out (30s limit exceeded)',
+        exitCode: 124,
+        durationMs: Date.now() - startTime,
+      });
+    }, 30000);
+
+    const checkServerStartup = (chunk: string) => {
+      const serverKeywords = [
+        'Running on http',
+        'Serving Flask app',
+        'Debugger is active',
+        'Uvicorn running on',
+        'Server running on',
+        'listening on port',
+        'Started server on',
+        'Press CTRL+C to quit',
+      ];
+      if (!resolved && serverKeywords.some(kw => chunk.includes(kw))) {
+        // Wait 600ms to collect any final startup output
+        setTimeout(() => {
+          const banner = `\n\n✨ [CodeSync] Application server is running! To interact with it live or test routes continuously, use the Terminal tab below.`;
+          cleanupAndResolve({
+            stdout: stdout + banner,
+            stderr,
+            exitCode: 0,
+            durationMs: Date.now() - startTime,
+          });
+        }, 600);
+      }
+    };
+
+    child.stdout.on('data', (d) => {
+      const text = d.toString();
+      stdout += text;
+      checkServerStartup(text);
+    });
+
+    child.stderr.on('data', (d) => {
+      const text = d.toString();
+      stderr += text;
+      checkServerStartup(text);
+    });
+
+    child.on('error', (err) => {
+      cleanupAndResolve({
+        stdout,
+        stderr: err.message,
+        exitCode: 1,
+        durationMs: Date.now() - startTime,
+      });
+    });
+
+    child.on('close', (code) => {
+      cleanupAndResolve({
+        stdout,
+        stderr,
+        exitCode: code ?? 0,
+        durationMs: Date.now() - startTime,
+      });
+    });
+  });
+}
 
 export const executeCode = async (
   language: string,
@@ -95,10 +200,15 @@ export const executeCode = async (
       dockerCmd = `docker run --rm --network none --memory 256m --cpus 0.5 --pids-limit 64 -v "${volumePrefix}:/app:ro" -w /app ${image} sh -c "${runCmd}"`;
     }
 
+    const entryDir = path.dirname(entryFile);
+    const targetDir = entryDir && entryDir !== '.' ? path.join(tempDir, entryDir) : tempDir;
+    const targetFile = path.basename(entryFile);
+
     console.log(`[Exec] TempDir: ${tempDir}, RunId: ${runId}`);
     console.log(`[Exec] Files written:`, files.map(f => f.name));
+    console.log(`[Exec] TargetDir: ${targetDir}, TargetFile: ${targetFile}`);
     console.log(`[Exec] Docker command: ${dockerCmd}`);
-    // 4. Execute: Try Docker first; if host environment lacks Docker (e.g. Render / serverless), fall back to direct process execution
+    // 4. Execute: Try Docker first; if host environment lacks Docker or Docker fails due to missing dependencies, fall back to direct process execution
     try {
       const { stdout, stderr } = await execAsync(dockerCmd, { timeout: 30000 });
       return {
@@ -108,58 +218,19 @@ export const executeCode = async (
         durationMs: Date.now() - startTime,
       };
     } catch (error: any) {
+      const isMissingDeps = error.stderr && (
+        error.stderr.includes('ModuleNotFoundError') ||
+        error.stderr.includes('ImportError') ||
+        error.stderr.includes('Cannot find module')
+      );
       const isDockerMissing = error.code === 127 ||
         (error.stderr && error.stderr.includes('docker: not found')) ||
-        (error.message && error.message.includes('docker: not found'));
+        (error.message && error.message.includes('docker: not found')) ||
+        Boolean(isMissingDeps);
 
       if (isDockerMissing) {
-        console.log(`[Exec] Docker not available on host. Executing directly in isolated directory: ${tempDir}`);
-        try {
-          let directCmd: string;
-          if (language === 'python') {
-            directCmd = process.platform === 'win32' ? `python "${entryFile}"` : `python3 "${entryFile}"`;
-          } else if (language === 'javascript' || language === 'typescript') {
-            directCmd = `node "${entryFile}"`;
-          } else {
-            directCmd = runCmd;
-          }
-
-          let execOut;
-          try {
-            execOut = await execAsync(directCmd, { cwd: tempDir, timeout: 30000 });
-          } catch (firstErr: any) {
-            // If python3 failed because only 'python' is in PATH (or vice-versa), retry with alternate
-            if (language === 'python' && (firstErr.message?.includes('not found') || firstErr.code === 127)) {
-              const altCmd = directCmd.startsWith('python3') ? `python "${entryFile}"` : `python3 "${entryFile}"`;
-              execOut = await execAsync(altCmd, { cwd: tempDir, timeout: 30000 });
-            } else {
-              throw firstErr;
-            }
-          }
-
-          const { stdout, stderr } = execOut;
-          return {
-            stdout: stdout || '',
-            stderr: stderr || '',
-            exitCode: 0,
-            durationMs: Date.now() - startTime,
-          };
-        } catch (directError: any) {
-          if (directError.killed) {
-            return {
-              stdout: directError.stdout || '',
-              stderr: 'Execution timed out (30s limit exceeded)',
-              exitCode: 124,
-              durationMs: Date.now() - startTime,
-            };
-          }
-          return {
-            stdout: directError.stdout || '',
-            stderr: directError.stderr || directError.message || 'Execution failed',
-            exitCode: directError.code || 1,
-            durationMs: Date.now() - startTime,
-          };
-        }
+        console.log(`[Exec] Falling back to direct host execution: ${targetDir} -> ${targetFile}`);
+        return await runDirectProcess(language, targetDir, targetFile, startTime);
       }
 
       if (error.killed) {

@@ -7,16 +7,18 @@ export interface EditorTab {
   fileName: string;
   language: string;
   isDirty: boolean;
+  projectId?: string;
 }
 
 interface TabsContextType {
   tabs: EditorTab[];
   activeTabId: string | null;
-  openFile: (fileId: string, fileName: string) => void;
+  openFile: (fileId: string, fileName: string, projectId?: string) => void;
   closeTab: (fileId: string) => void;
   setActiveTab: (fileId: string) => void;
   markDirty: (fileId: string, dirty: boolean) => void;
   closeAllTabs: () => void;
+  setProjectScope: (projectId: string) => void;
   reorderTabs: (fromIndex: number, toIndex: number) => void;
 }
 
@@ -38,7 +40,18 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const previousActiveRef = useRef<string | null>(null);
 
-  const openFile = useCallback((fileId: string, fileName: string) => {
+  const currentProjectIdRef = useRef<string | null>(null);
+
+  const setProjectScope = useCallback((projectId: string) => {
+    if (currentProjectIdRef.current && currentProjectIdRef.current !== projectId) {
+      // Switched project: automatically clear old tabs
+      setTabs([]);
+      setActiveTabId(null);
+    }
+    currentProjectIdRef.current = projectId;
+  }, []);
+
+  const openFile = useCallback((fileId: string, fileName: string, projectId?: string) => {
     setTabs(prev => {
       const existing = prev.find(t => t.fileId === fileId);
       if (existing) {
@@ -51,6 +64,7 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
         fileName,
         language: getLanguage(fileName),
         isDirty: false,
+        projectId: projectId || currentProjectIdRef.current || undefined,
       }];
     });
     setActiveTabId(prevActive => {
@@ -129,7 +143,7 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <TabsContext.Provider value={{
-      tabs, activeTabId, openFile, closeTab, setActiveTab, markDirty, closeAllTabs, reorderTabs,
+      tabs, activeTabId, openFile, closeTab, setActiveTab, markDirty, closeAllTabs, setProjectScope, reorderTabs,
     }}>
       {children}
     </TabsContext.Provider>

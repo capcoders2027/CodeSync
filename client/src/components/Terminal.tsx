@@ -5,12 +5,63 @@ import { Terminal as XTermTerminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
+import { useTheme } from '../contexts/ThemeContext';
+
+const DARK_THEME = {
+  background: '#0d1117',
+  foreground: '#e6edf3',
+  cursor: '#58a6ff',
+  cursorAccent: '#0d1117',
+  selectionBackground: 'rgba(56, 139, 253, 0.3)',
+  black: '#484f58',
+  red: '#f85149',
+  green: '#3fb950',
+  yellow: '#d29922',
+  blue: '#58a6ff',
+  magenta: '#8957e5',
+  cyan: '#39d2c0',
+  white: '#e6edf3',
+  brightBlack: '#6e7681',
+  brightRed: '#f85149',
+  brightGreen: '#3fb950',
+  brightYellow: '#d29922',
+  brightBlue: '#58a6ff',
+  brightMagenta: '#8957e5',
+  brightCyan: '#39d2c0',
+  brightWhite: '#ffffff',
+};
+
+const LIGHT_THEME = {
+  background: '#ffffff',
+  foreground: '#1f2328',
+  cursor: '#0969da',
+  cursorAccent: '#ffffff',
+  selectionBackground: 'rgba(9, 105, 218, 0.25)',
+  black: '#24292f',
+  red: '#cf222e',
+  green: '#1a7f37',
+  yellow: '#9a6700',
+  blue: '#0969da',
+  magenta: '#8250df',
+  cyan: '#0598ab',
+  white: '#ffffff',
+  brightBlack: '#57606a',
+  brightRed: '#cf222e',
+  brightGreen: '#1a7f37',
+  brightYellow: '#9a6700',
+  brightBlue: '#0969da',
+  brightMagenta: '#8250df',
+  brightCyan: '#0598ab',
+  brightWhite: '#ffffff',
+};
 
 interface TerminalProps {
   visible: boolean;
+  projectId?: string;
 }
 
-export function Terminal({ visible }: TerminalProps) {
+export function Terminal({ visible, projectId }: TerminalProps) {
+  const { theme } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTermTerminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -26,7 +77,7 @@ export function Terminal({ visible }: TerminalProps) {
     // Derive WS URL from the API URL env var (http->ws, https->wss)
     const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
     const wsBase = apiBase.replace(/^http/, 'ws').replace(/\/api$/, '');
-    const ws = new WebSocket(`${wsBase}/ws/terminal?token=${token}`);
+    const ws = new WebSocket(`${wsBase}/ws/terminal?token=${token}&projectId=${projectId || ''}`);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -69,29 +120,7 @@ export function Terminal({ visible }: TerminalProps) {
     if (!containerRef.current || termRef.current) return;
 
     const term = new XTermTerminal({
-      theme: {
-        background: '#0d1117',
-        foreground: '#e6edf3',
-        cursor: '#58a6ff',
-        cursorAccent: '#0d1117',
-        selectionBackground: 'rgba(56, 139, 253, 0.3)',
-        black: '#484f58',
-        red: '#f85149',
-        green: '#3fb950',
-        yellow: '#d29922',
-        blue: '#58a6ff',
-        magenta: '#8957e5',
-        cyan: '#39d2c0',
-        white: '#e6edf3',
-        brightBlack: '#6e7681',
-        brightRed: '#f85149',
-        brightGreen: '#3fb950',
-        brightYellow: '#d29922',
-        brightBlue: '#58a6ff',
-        brightMagenta: '#8957e5',
-        brightCyan: '#39d2c0',
-        brightWhite: '#ffffff',
-      },
+      theme: theme === 'dark' ? DARK_THEME : LIGHT_THEME,
       fontFamily: 'var(--font-mono), "JetBrains Mono", "Fira Code", "Cascadia Code", monospace',
       fontSize: 13,
       lineHeight: 1.4,
@@ -143,6 +172,13 @@ export function Terminal({ visible }: TerminalProps) {
       setTimeout(() => fitRef.current?.fit(), 50);
     }
   }, [visible]);
+
+  // Update terminal theme dynamically when user toggles light/dark mode
+  useEffect(() => {
+    if (termRef.current) {
+      termRef.current.options.theme = theme === 'dark' ? DARK_THEME : LIGHT_THEME;
+    }
+  }, [theme]);
 
   // Listen for window resize
   useEffect(() => {

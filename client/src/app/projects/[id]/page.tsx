@@ -65,7 +65,15 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
   const toast = useToast();
   const { theme, toggleTheme } = useTheme();
   const { getWorkspace, setWorkspace } = useWorkspace();
-  const { tabs, activeTabId, openFile, closeTab, setActiveTab } = useTabs();
+  const { tabs, activeTabId, openFile, closeTab, setActiveTab, setProjectScope, closeAllTabs } = useTabs();
+
+  // Scope tabs to the active project; automatically close tabs on project change or unmount
+  useEffect(() => {
+    setProjectScope(id);
+    return () => {
+      closeAllTabs();
+    };
+  }, [id, setProjectScope, closeAllTabs]);
 
   // Try restoring from workspace cache to prevent reload on window switch
   const cachedWs = getWorkspace(id);
@@ -412,8 +420,8 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
 
   // ---- File tree handler ----
   const handleFileSelect = useCallback((fileId: string, fileName: string) => {
-    openFile(fileId, fileName);
-  }, [openFile]);
+    openFile(fileId, fileName, id);
+  }, [openFile, id]);
 
   // Find the active tab data
   const activeTab = tabs.find(t => t.fileId === activeTabId);
@@ -728,7 +736,7 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
               {/* Panel Content (Terminal session preserved even when switched to output) */}
               <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ flex: 1, display: bottomPanel === 'terminal' ? 'flex' : 'none', minHeight: 0 }}>
-                  <TerminalComponent visible={bottomPanel === 'terminal'} />
+                  <TerminalComponent visible={bottomPanel === 'terminal'} projectId={id} />
                 </div>
                 {bottomPanel === 'output' && (
                   <RunOutputPanel
