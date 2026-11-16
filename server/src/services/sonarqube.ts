@@ -308,6 +308,16 @@ export const runLocalStaticAnalysis = (
     let fileNcloc = 0;
     let fileComplexity = 1;
 
+    const isCliScript = (language === 'python' || language === 'javascript' || language === 'typescript') && (
+      file.name === 'main.py' ||
+      file.name === 'cli.py' ||
+      file.name === 'index.py' ||
+      file.content.includes('input(') ||
+      file.content.includes('argparse') ||
+      file.content.includes('sys.argv')
+    );
+    let printWarningEmitted = false;
+
     lines.forEach((line, idx) => {
       const trimmed = line.trim();
       const lineNum = idx + 1;
@@ -328,27 +338,35 @@ export const runLocalStaticAnalysis = (
           fileComplexity++;
         }
 
-        // Code Smells
+        // Code Smells: S106 (Standard outputs in production code)
+        // CLI interactive scripts intentionally use print() for terminal UI — do not spam.
+        // For non-CLI files, emit one clear smell per file instead of spamming every line.
         if (language === 'python' && /\bprint\s*\(/.test(trimmed)) {
-          smells.push({
-            key: `smell_${file.name}_${lineNum}_print`,
-            rule: 'python:S106',
-            severity: 'MINOR',
-            component: file.name,
-            line: lineNum,
-            message: 'Standard outputs (print) should not be used in production code.',
-            type: 'CODE_SMELL',
-          });
+          if (!isCliScript && !printWarningEmitted) {
+            printWarningEmitted = true;
+            smells.push({
+              key: `smell_${file.name}_${lineNum}_print`,
+              rule: 'python:S106',
+              severity: 'MINOR',
+              component: file.name,
+              line: lineNum,
+              message: 'Standard outputs (print) should not be used in production code. Use a logging framework instead.',
+              type: 'CODE_SMELL',
+            });
+          }
         } else if ((language === 'javascript' || language === 'typescript') && /\bconsole\.(log|debug|info)\s*\(/.test(trimmed)) {
-          smells.push({
-            key: `smell_${file.name}_${lineNum}_console`,
-            rule: 'javascript:S106',
-            severity: 'MINOR',
-            component: file.name,
-            line: lineNum,
-            message: 'Standard outputs (console.log) should not be used in production code.',
-            type: 'CODE_SMELL',
-          });
+          if (!isCliScript && !printWarningEmitted) {
+            printWarningEmitted = true;
+            smells.push({
+              key: `smell_${file.name}_${lineNum}_console`,
+              rule: 'javascript:S106',
+              severity: 'MINOR',
+              component: file.name,
+              line: lineNum,
+              message: 'Standard outputs (console.log) should not be used in production code. Use a logging framework instead.',
+              type: 'CODE_SMELL',
+            });
+          }
         }
 
         if (/(password|secret|apikey|api_key|token)\s*[:=]\s*["'][^"']+["']/i.test(trimmed) && !trimmed.toLowerCase().includes('process.env')) {
@@ -375,8 +393,12 @@ export const runLocalStaticAnalysis = (
           });
         }
 
+        // S134: Control flow statements (if/for/while/try/except/switch) should not be nested too deeply (> 4 levels)
+        // Only flag actual control flow statements, not every ordinary statement in the indented block!
+        const isControlFlow = /^(if|elif|else\s*:|for|while|try\s*:|except|switch|case)\b/.test(trimmed);
         const indentMatch = line.match(/^(\s+)/);
-        if (indentMatch && indentMatch[1].length >= 16) {
+        const indentLength = indentMatch ? indentMatch[1].replace(/\t/g, '    ').length : 0;
+        if (isControlFlow && indentLength >= 16) {
           smells.push({
             key: `smell_${file.name}_${lineNum}_nesting`,
             rule: 'complexity:S134',
