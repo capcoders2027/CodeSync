@@ -17,7 +17,9 @@ export default function RegisterPage() {
   const { login } = useAuth();
   const toast = useToast();
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+  const API_URL = typeof window !== 'undefined' && !window.location.hostname.includes('localhost')
+    ? (process.env.NEXT_PUBLIC_API_URL || 'https://codesync-server-ealz.onrender.com/api')
+    : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api');
 
   const passwordChecks = [
     { label: 'At least 8 characters', met: password.length >= 8 },

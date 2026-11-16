@@ -24,7 +24,9 @@ export default function LoginPage() {
   const { login } = useAuth();
   const toast = useToast();
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+  const API_URL = typeof window !== 'undefined' && !window.location.hostname.includes('localhost')
+    ? (process.env.NEXT_PUBLIC_API_URL || 'https://codesync-server-ealz.onrender.com/api')
+    : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

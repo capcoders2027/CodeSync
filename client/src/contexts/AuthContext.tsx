@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { getApiBase } from '../lib/apiBase';
 
 interface User {
   id: string;
@@ -52,7 +53,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/auth/me`, {
+        const res = await fetch(`${getApiBase()}/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -84,7 +85,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const logout = async () => {
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/auth/logout`, { method: 'POST' });
+      await fetch(`${getApiBase()}/auth/logout`, { method: 'POST' });
     } catch (e) {
       console.error('Logout failed', e);
     }

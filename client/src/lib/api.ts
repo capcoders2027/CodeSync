@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+import { getApiBase } from './apiBase';
 
 export function getAuthHeaders(): Record<string, string> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
@@ -9,7 +9,7 @@ export async function api<T = any>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<{ ok: boolean; status: number; data: T; message?: string }> {
-  const url = `${API_BASE}${endpoint}`;
+  const url = `${getApiBase()}${endpoint}`;
 
   const headers: Record<string, string> = {
     ...getAuthHeaders(),
