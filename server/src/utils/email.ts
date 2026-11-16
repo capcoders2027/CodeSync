@@ -15,17 +15,27 @@ async function getTransporter(): Promise<nodemailer.Transporter> {
   if (dynamicTransporter) return dynamicTransporter;
 
   if (env.SMTP_USER && env.SMTP_PASS && !env.SMTP_HOST.includes('ethereal')) {
-    dynamicTransporter = nodemailer.createTransport({
-      host: env.SMTP_HOST,
-      port: env.SMTP_PORT,
-      secure: env.SMTP_PORT === 465,
-      auth: {
-        user: env.SMTP_USER,
-        pass: env.SMTP_PASS,
-      },
-    });
+    const cleanPass = env.SMTP_PASS.replace(/\s+/g, '');
+    const isGmail = env.SMTP_HOST.includes('gmail');
+    dynamicTransporter = isGmail
+      ? nodemailer.createTransport({
+          service: 'gmail',
+          auth: {
+            user: env.SMTP_USER,
+            pass: cleanPass,
+          },
+        })
+      : nodemailer.createTransport({
+          host: env.SMTP_HOST,
+          port: env.SMTP_PORT,
+          secure: env.SMTP_PORT === 465,
+          auth: {
+            user: env.SMTP_USER,
+            pass: cleanPass,
+          },
+        });
     isEthereal = false;
-    console.log(`[Email] Using configured SMTP server: ${env.SMTP_HOST}:${env.SMTP_PORT} (${env.SMTP_USER})`);
+    console.log(`[Email] Using configured SMTP server: ${isGmail ? 'Gmail' : env.SMTP_HOST}:${env.SMTP_PORT} (${env.SMTP_USER})`);
     return dynamicTransporter;
   }
 
