@@ -11,10 +11,18 @@ interface ShareProjectModalProps {
   onSuccess?: () => void;
 }
 
+const ROLES_LIST = [
+  { id: 'developer', name: 'Developer', desc: 'Edit files, run code & view quality metrics' },
+  { id: 'tester', name: 'QA Tester', desc: 'Run code & tests, review quality & defects' },
+  { id: 'team_lead', name: 'Team Lead', desc: 'Full access: manage members & project settings' },
+  { id: 'member', name: 'Team Member', desc: 'General collaborator with file edit access' },
+  { id: 'viewer', name: 'Viewer', desc: 'Read-only access to code & analysis' },
+];
+
 export function ShareProjectModal({ projectId, projectName, onClose, onSuccess }: ShareProjectModalProps) {
   const toast = useToast();
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'member' | 'team_lead'>('member');
+  const [role, setRole] = useState('developer');
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -49,16 +57,12 @@ export function ShareProjectModal({ projectId, projectName, onClose, onSuccess }
         body: JSON.stringify({
           email: email.trim(),
           role,
-          permissions: {
-            can_trigger_analysis: role === 'team_lead',
-            can_view_analysis: true,
-          },
         }),
       });
 
       const data = await res.json();
       if (res.ok) {
-        toast.success('Invitation sent!', `${email} has been invited to collaborate.`);
+        toast.success('Invitation sent!', `${email} has been invited as ${role.replace('_', ' ')}.`);
         setEmail('');
         onSuccess?.();
       } else {
@@ -172,55 +176,42 @@ export function ShareProjectModal({ projectId, projectName, onClose, onSuccess }
               </div>
 
               <div className="form-group">
-                <label className="form-label">Project Role</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--sp-3)' }}>
-                  <label
-                    style={{
-                      display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-3)',
-                      padding: 'var(--sp-3) var(--sp-4)',
-                      borderRadius: 'var(--radius-sm)',
-                      border: `1px solid ${role === 'member' ? 'var(--accent-blue)' : 'var(--border-subtle)'}`,
-                      backgroundColor: role === 'member' ? 'var(--accent-blue-bg)' : 'transparent',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="role"
-                      value="member"
-                      checked={role === 'member'}
-                      onChange={() => setRole('member')}
-                      style={{ marginTop: 3 }}
-                    />
-                    <div>
-                      <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>Member</div>
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>Edit files & run code</div>
-                    </div>
-                  </label>
-
-                  <label
-                    style={{
-                      display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-3)',
-                      padding: 'var(--sp-3) var(--sp-4)',
-                      borderRadius: 'var(--radius-sm)',
-                      border: `1px solid ${role === 'team_lead' ? 'var(--accent-purple)' : 'var(--border-subtle)'}`,
-                      backgroundColor: role === 'team_lead' ? 'var(--accent-purple-bg)' : 'transparent',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="role"
-                      value="team_lead"
-                      checked={role === 'team_lead'}
-                      onChange={() => setRole('team_lead')}
-                      style={{ marginTop: 3 }}
-                    />
-                    <div>
-                      <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>Team Lead</div>
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>Invite & manage members</div>
-                    </div>
-                  </label>
+                <label className="form-label">Project Role & Privileges</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' }}>
+                  {ROLES_LIST.map(r => (
+                    <label
+                      key={r.id}
+                      style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-3)',
+                        padding: 'var(--sp-2) var(--sp-3)',
+                        borderRadius: 'var(--radius-sm)',
+                        border: `1px solid ${role === r.id ? 'var(--accent-blue)' : 'var(--border-subtle)'}`,
+                        backgroundColor: role === r.id ? 'var(--accent-blue-bg)' : 'transparent',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="role"
+                        value={r.id}
+                        checked={role === r.id}
+                        onChange={() => setRole(r.id)}
+                        style={{ marginTop: 3 }}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>{r.name}</span>
+                          {role === r.id && (
+                            <span style={{ fontSize: 10, background: 'rgba(56, 189, 248, 0.2)', color: 'var(--accent-blue)', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
+                              SELECTED
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginTop: 2 }}>{r.desc}</div>
+                      </div>
+                    </label>
+                  ))}
                 </div>
               </div>
 
