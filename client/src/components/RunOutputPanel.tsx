@@ -3,7 +3,7 @@
 import React from 'react';
 import {
   X, Play, Square, Loader, CheckCircle, XCircle, Clock,
-  AlertTriangle, Settings, ChevronDown
+  AlertTriangle, Settings, ChevronDown, TerminalSquare
 } from 'lucide-react';
 
 export type RunState = 'idle' | 'preparing' | 'building' | 'running' | 'completed' | 'failed' | 'stopped';
@@ -32,6 +32,7 @@ interface RunOutputPanelProps {
   onClose: () => void;
   onStop: () => void;
   onConfigOpen: () => void;
+  onSwitchToTerminal?: () => void;
 }
 
 const STATE_CONFIG: Record<RunState, { icon: React.ReactNode; label: string; color: string }> = {
@@ -45,9 +46,16 @@ const STATE_CONFIG: Record<RunState, { icon: React.ReactNode; label: string; col
 };
 
 export function RunOutputPanel({
-  runState, runOutput, runConfig, projectName, onClose, onStop, onConfigOpen,
+  runState, runOutput, runConfig, projectName, onClose, onStop, onConfigOpen, onSwitchToTerminal,
 }: RunOutputPanelProps) {
   const stateInfo = STATE_CONFIG[runState];
+  const isInteractive = Boolean(
+    runOutput?.stderr && (
+      runOutput.stderr.includes('EOFError') ||
+      runOutput.stderr.includes('Interactive CLI') ||
+      runOutput.stderr.includes('EOF when reading a line')
+    )
+  );
 
   return (
     <div style={{
@@ -154,6 +162,37 @@ export function RunOutputPanel({
               }}>
                 {runOutput.stderr}
               </pre>
+            )}
+
+            {/* Interactive CLI Quick-Switch Hint */}
+            {isInteractive && onSwitchToTerminal && (
+              <div style={{
+                marginTop: 'var(--sp-4)',
+                padding: 'var(--sp-4) var(--sp-5)',
+                backgroundColor: 'var(--accent-blue-bg)',
+                border: '1px solid var(--accent-blue)',
+                borderRadius: 'var(--radius-sm)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 'var(--sp-4)',
+              }}>
+                <div>
+                  <div style={{ color: 'var(--accent-blue)', fontWeight: 600, fontSize: 'var(--text-sm)', marginBottom: '2px' }}>
+                    Interactive Console Program Detected
+                  </div>
+                  <div style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-xs)' }}>
+                    This application uses <code>input()</code> for interactive keyboard commands. Switch to the integrated terminal to interact with it.
+                  </div>
+                </div>
+                <button
+                  className="btn btn-sm btn-primary"
+                  onClick={onSwitchToTerminal}
+                  style={{ whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                  <TerminalSquare size={13} /> Open in Terminal
+                </button>
+              </div>
             )}
 
             {/* Exit status */}

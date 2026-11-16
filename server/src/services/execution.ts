@@ -131,9 +131,13 @@ function runDirectProcess(
     });
 
     child.on('close', (code) => {
+      let finalStderr = stderr;
+      if (finalStderr.includes('EOFError') || finalStderr.includes('EOF when reading a line')) {
+        finalStderr += `\n\n💡 [Interactive CLI Application Detected]\nThis program uses input() to request interactive keyboard input.\nBecause "Run Project" executes headlessly without a terminal TTY, it encountered EOF.\n👉 Open the TERMINAL tab below (or press Ctrl+\`) and run: python ${targetFile}`;
+      }
       cleanupAndResolve({
         stdout,
-        stderr,
+        stderr: finalStderr,
         exitCode: code ?? 0,
         durationMs: Date.now() - startTime,
       });
@@ -241,9 +245,13 @@ export const executeCode = async (
           durationMs: Date.now() - startTime,
         };
       }
+      let finalStderr = error.stderr || error.message || 'Execution failed';
+      if (finalStderr.includes('EOFError') || finalStderr.includes('EOF when reading a line')) {
+        finalStderr += `\n\n💡 [Interactive CLI Application Detected]\nThis program uses input() to request interactive keyboard input.\nBecause "Run Project" executes headlessly without a terminal TTY, it encountered EOF.\n👉 Open the TERMINAL tab below (or press Ctrl+\`) and run: python ${targetFile}`;
+      }
       return {
         stdout: error.stdout || '',
-        stderr: error.stderr || error.message || 'Execution failed',
+        stderr: finalStderr,
         exitCode: error.code || 1,
         durationMs: Date.now() - startTime,
       };

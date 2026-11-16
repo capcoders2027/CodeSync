@@ -747,6 +747,7 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
                     onClose={() => setBottomPanel('none')}
                     onStop={handleStopProject}
                     onConfigOpen={() => setShowRunConfig(true)}
+                    onSwitchToTerminal={() => setBottomPanel('terminal')}
                   />
                 )}
               </div>
