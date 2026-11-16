@@ -18,7 +18,7 @@ const upload = multer({
 const createFileSchema = z.object({
   name: z.string().min(1).max(255),
   type: z.enum(['file', 'folder']),
-  parentId: z.string().uuid().nullable().optional(),
+  parentId: z.string().uuid().nullable().optional().or(z.literal('')).transform(val => (val === '' ? null : val)),
   content: z.string().optional(),
 });
 
@@ -47,7 +47,7 @@ filesRouter.get('/', async (req, res, next) => {
         updatedAt: true,
       },
       orderBy: [
-        { type: 'asc' }, // folders first (assuming 'folder' < 'file' alphabetically, wait: 'file' < 'folder'. Better sort by type DESC)
+        { type: 'desc' }, // 'folder' > 'file' alphabetically, so folders always sort first
         { name: 'asc' }
       ]
     });
@@ -59,37 +59,98 @@ filesRouter.get('/', async (req, res, next) => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /api/projects/:projectId/files - Create a file or folder
+// POST /api/projects/:projectId/files - Create a file or folder (supports nested paths)
 // ---------------------------------------------------------------------------
 filesRouter.post('/', async (req, res, next) => {
   try {
     const { projectId } = req.params as { projectId: string };
     const { name, type, parentId } = createFileSchema.parse(req.body);
 
-    // Validate parent exists and is a folder
-    if (parentId) {
-      const parent = await prisma.file.findUnique({ where: { id: parentId } });
+    // Validate parent exists and is a folder if specified
+    let targetParentId = parentId || null;
+    if (targetParentId) {
+      const parent = await prisma.file.findUnique({ where: { id: targetParentId } });
       if (!parent || parent.projectId !== projectId || parent.type !== 'folder') {
         throw new AppError(400, 'Invalid parent directory', 'BAD_REQUEST');
       }
     }
 
-    // Check for duplicate names in the same directory
+    // Support nested path creation (e.g. 'subfolder/inner' or 'utils/helpers.ts')
+    const rawPath = name.replace(/\\/g, '/');
+    const segments = rawPath.split('/').filter(Boolean);
+
+    if (segments.length === 0) {
+      throw new AppError(400, 'Name cannot be empty', 'BAD_REQUEST');
+    }
+
+    let currentParentId = targetParentId;
+
+    if (type === 'folder') {
+      // Create all folder segments in sequence
+      let lastFolder: any = null;
+      for (const seg of segments) {
+        let folder = await prisma.file.findFirst({
+          where: { projectId, parentId: currentParentId, name: seg, type: 'folder' }
+        });
+        if (!folder) {
+          folder = await prisma.file.create({
+            data: {
+              projectId,
+              parentId: currentParentId,
+              name: seg,
+              type: 'folder'
+            }
+          });
+        }
+        currentParentId = folder.id;
+        lastFolder = folder;
+      }
+
+      await prisma.project.update({
+        where: { id: projectId },
+        data: { updatedAt: new Date() },
+      });
+
+      return res.status(201).json({ status: 'success', data: { file: lastFolder } });
+    }
+
+    // For files: create intermediate folders if path contains slashes
+    const folderSegments = segments.slice(0, segments.length - 1);
+    const leafFileName = segments[segments.length - 1];
+
+    for (const folderName of folderSegments) {
+      let folder = await prisma.file.findFirst({
+        where: { projectId, parentId: currentParentId, name: folderName, type: 'folder' }
+      });
+      if (!folder) {
+        folder = await prisma.file.create({
+          data: {
+            projectId,
+            parentId: currentParentId,
+            name: folderName,
+            type: 'folder'
+          }
+        });
+      }
+      currentParentId = folder.id;
+    }
+
+    // Check for duplicate in the final target directory
     const existing = await prisma.file.findFirst({
-      where: { projectId, parentId: parentId || null, name }
+      where: { projectId, parentId: currentParentId, name: leafFileName }
     });
 
     if (existing) {
-      throw new AppError(409, `A ${type} with this name already exists here`, 'CONFLICT');
+      throw new AppError(409, `A file with name "${leafFileName}" already exists in this folder`, 'CONFLICT');
     }
 
     const file = await prisma.file.create({
       data: {
         projectId,
-        name,
-        type,
-        parentId: parentId || null,
-        content: type === 'file' ? (req.body.content || '') : null,
+        name: leafFileName,
+        type: 'file',
+        parentId: currentParentId,
+        content: req.body.content || '',
       },
       select: { id: true, name: true, type: true, parentId: true, updatedAt: true }
     });
@@ -99,14 +160,14 @@ filesRouter.post('/', async (req, res, next) => {
       data: {
         projectId,
         userId: req.user!.id,
-        action: type === 'folder' ? 'folder_created' : 'file_created',
+        action: 'file_created',
         entityType: 'file',
         entityId: file.id,
-        metadata: { name: file.name, type: file.type, parentId },
+        metadata: { name: file.name, type: file.type, parentId: currentParentId },
       },
     }).catch(err => console.error('[ActivityLog Error]', err));
 
-    // Touch project updatedAt to reflect recent activity
+    // Touch project updatedAt
     await prisma.project.update({
       where: { id: projectId },
       data: { updatedAt: new Date() },

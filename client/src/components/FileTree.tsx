@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   FileCode, Folder, FolderOpen, ChevronRight, ChevronDown,
-  Plus, Trash2, FilePlus, FolderPlus, Upload, Loader2, FolderUp, Image as ImageIcon
+  Plus, Trash2, FilePlus, FolderPlus, Upload, Loader2, FolderUp, Image as ImageIcon,
+  ChevronsUpDown
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 
@@ -63,7 +64,7 @@ export function FileTree({ projectId, onSelectFile, activeFileId, width = 250 }:
     fetchFiles();
   }, [projectId]);
 
-  const fetchFiles = async () => {
+  const fetchFiles = async (): Promise<FileNode[]> => {
     setLoading(true);
     try {
       const token = localStorage.getItem('accessToken');
@@ -74,28 +75,65 @@ export function FileTree({ projectId, onSelectFile, activeFileId, width = 250 }:
       if (res.ok) {
         const data = await res.json();
         setFiles(data.data.files);
+        return data.data.files as FileNode[];
       }
     } finally {
       setLoading(false);
     }
+    return [];
   };
 
   const handleCreate = async (type: 'file' | 'folder', parentId: string | null) => {
-    const name = prompt(`Enter ${type} name:`);
-    if (!name) return;
+    const parentFolder = parentId ? files.find(f => f.id === parentId) : null;
+    const promptMessage = parentFolder
+      ? `Create ${type} inside "${parentFolder.name}":`
+      : `Enter new ${type} name (e.g. ${type === 'folder' ? 'components/ui' : 'index.ts'}):`;
 
-    const token = localStorage.getItem('accessToken');
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-    await fetch(`${apiBase}/projects/${projectId}/files`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({ name, type, parentId })
-    });
-    fetchFiles();
-    setContextMenu(null);
+    const name = prompt(promptMessage);
+    if (!name || !name.trim()) return;
+
+    try {
+      const token = localStorage.getItem('accessToken');
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const res = await fetch(`${apiBase}/projects/${projectId}/files`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ name: name.trim(), type, parentId: parentId || null })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(
+          `${type === 'folder' ? 'Folder' : 'File'} created`,
+          `"${name}" added successfully.`
+        );
+        // Automatically expand the parent folder so the new child is visible
+        if (parentId) {
+          setExpandedFolders(prev => new Set(prev).add(parentId));
+        }
+        if (type === 'folder' && data.data?.file?.id) {
+          setExpandedFolders(prev => new Set(prev).add(data.data.file.id));
+        }
+      } else {
+        toast.error('Failed to create', data.message || `Could not create ${type}.`);
+      }
+    } catch {
+      toast.error('Error', `Network error creating ${type}.`);
+    } finally {
+      await fetchFiles();
+      setContextMenu(null);
+    }
+  };
+
+  const toggleExpandAll = () => {
+    if (expandedFolders.size > 0) {
+      setExpandedFolders(new Set());
+    } else {
+      const folderIds = files.filter(f => f.type === 'folder').map(f => f.id);
+      setExpandedFolders(new Set(folderIds));
+    }
   };
 
   const handleDelete = async (fileId: string) => {
@@ -175,7 +213,15 @@ export function FileTree({ projectId, onSelectFile, activeFileId, width = 250 }:
       const data = await res.json();
       if (res.ok) {
         toast.success('Upload complete', `Successfully uploaded ${data.data.count} file(s).`);
-        await fetchFiles();
+        const updatedFiles = await fetchFiles();
+        if (updatedFiles && updatedFiles.length > 0) {
+          const folderIds = updatedFiles.filter(f => f.type === 'folder').map(f => f.id);
+          setExpandedFolders(prev => {
+            const next = new Set(prev);
+            folderIds.forEach(id => next.add(id));
+            return next;
+          });
+        }
       } else {
         toast.error('Upload failed', data.message || 'Could not upload files.');
       }
@@ -324,14 +370,24 @@ export function FileTree({ projectId, onSelectFile, activeFileId, width = 250 }:
               gap: '2px',
             }}>
               {file.type === 'folder' && (
-                <button
-                  className="btn-icon"
-                  onClick={(e) => { e.stopPropagation(); handleCreate('file', file.id); }}
-                  data-tooltip="New file"
-                  style={{ padding: '2px' }}
-                >
-                  <FilePlus size={12} />
-                </button>
+                <>
+                  <button
+                    className="btn-icon"
+                    onClick={(e) => { e.stopPropagation(); handleCreate('file', file.id); }}
+                    data-tooltip="New file inside folder"
+                    style={{ padding: '2px' }}
+                  >
+                    <FilePlus size={12} />
+                  </button>
+                  <button
+                    className="btn-icon"
+                    onClick={(e) => { e.stopPropagation(); handleCreate('folder', file.id); }}
+                    data-tooltip="New folder inside folder"
+                    style={{ padding: '2px' }}
+                  >
+                    <FolderPlus size={12} />
+                  </button>
+                </>
               )}
               <button
                 className="btn-icon"
@@ -428,6 +484,14 @@ export function FileTree({ projectId, onSelectFile, activeFileId, width = 250 }:
         <div className="flex items-center gap-1">
           <button
             className="btn-icon"
+            onClick={toggleExpandAll}
+            data-tooltip={expandedFolders.size > 0 ? "Collapse all folders" : "Expand all folders"}
+            style={{ padding: '3px' }}
+          >
+            <ChevronsUpDown size={14} />
+          </button>
+          <button
+            className="btn-icon"
             onClick={() => handleCreate('file', null)}
             data-tooltip="New file"
             style={{ padding: '3px' }}
@@ -504,6 +568,68 @@ export function FileTree({ projectId, onSelectFile, activeFileId, width = 250 }:
           renderTree(null)
         )}
       </div>
+
+      {/* Right-click Context Menu */}
+      {contextMenu && (
+        <>
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
+            onClick={() => setContextMenu(null)}
+            onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }}
+          />
+          <div
+            className="dropdown-menu animate-in"
+            style={{
+              position: 'fixed',
+              left: Math.min(contextMenu.x, typeof window !== 'undefined' ? window.innerWidth - 180 : 300),
+              top: Math.min(contextMenu.y, typeof window !== 'undefined' ? window.innerHeight - 150 : 300),
+              zIndex: 9999,
+              minWidth: 170,
+              padding: '4px',
+              backgroundColor: 'var(--bg-elevated)',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+              border: '1px solid var(--border-default)',
+              borderRadius: 'var(--radius-sm)',
+            }}
+          >
+            {(() => {
+              const target = files.find(f => f.id === contextMenu.id);
+              const isFolder = target?.type === 'folder';
+              const targetParentId = isFolder ? target.id : target?.parentId || null;
+
+              return (
+                <>
+                  <button
+                    className="dropdown-item"
+                    onClick={() => handleCreate('file', targetParentId)}
+                    style={{ padding: '6px 10px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: 8 }}
+                  >
+                    <FilePlus size={14} style={{ color: 'var(--accent-blue)' }} />
+                    <span>New File</span>
+                  </button>
+                  <button
+                    className="dropdown-item"
+                    onClick={() => handleCreate('folder', targetParentId)}
+                    style={{ padding: '6px 10px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: 8 }}
+                  >
+                    <FolderPlus size={14} style={{ color: 'var(--accent-blue)' }} />
+                    <span>New Folder</span>
+                  </button>
+                  <div className="dropdown-divider" style={{ margin: '4px 0' }} />
+                  <button
+                    className="dropdown-item dropdown-item-danger"
+                    onClick={() => handleDelete(contextMenu.id)}
+                    style={{ padding: '6px 10px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: 8, color: 'var(--accent-red)' }}
+                  >
+                    <Trash2 size={14} />
+                    <span>Delete {isFolder ? 'Folder' : 'File'}</span>
+                  </button>
+                </>
+              );
+            })()}
+          </div>
+        </>
+      )}
     </div>
   );
 }
