@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Mail, CheckCircle, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Mail, CheckCircle, AlertCircle, Copy } from 'lucide-react';
 import { useToast } from '../../../contexts/ToastContext';
 import { getApiBase } from '../../../lib/apiBase';
 
@@ -10,6 +10,7 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [resetUrl, setResetUrl] = useState('');
   const [error, setError] = useState('');
   const toast = useToast();
 
@@ -30,7 +31,10 @@ export default function ForgotPasswordPage() {
       const data = await res.json();
       if (res.ok) {
         setSubmitted(true);
-        toast.success('Reset link sent', 'If an account exists, a reset link was sent.');
+        if (data.data?.resetUrl) {
+          setResetUrl(data.data.resetUrl);
+        }
+        toast.success('Reset link ready', 'Password reset instructions have been generated.');
       } else {
         setError(data.message || 'Failed to process request.');
       }
@@ -61,7 +65,7 @@ export default function ForgotPasswordPage() {
 
       {submitted ? (
         <div style={{
-          background: 'rgba(34, 197, 94, 0.1)',
+          background: 'rgba(34, 197, 94, 0.08)',
           border: '1px solid rgba(34, 197, 94, 0.25)',
           borderRadius: 'var(--radius-md)',
           padding: 'var(--sp-6)',
@@ -69,12 +73,48 @@ export default function ForgotPasswordPage() {
         }}>
           <CheckCircle size={36} color="var(--accent-green)" style={{ margin: '0 auto 12px' }} />
           <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 600, marginBottom: 'var(--sp-2)' }}>
-            Check your email
+            Reset Link Dispatched
           </h3>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', marginBottom: 'var(--sp-6)' }}>
-            We have sent password reset instructions to <strong>{email}</strong> if an account exists.
+          <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', marginBottom: 'var(--sp-5)' }}>
+            Password reset instructions have been generated for <strong>{email}</strong>.
           </p>
-          <Link href="/auth/login" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
+
+          {resetUrl && (
+            <div style={{
+              background: 'rgba(56, 189, 248, 0.08)',
+              border: '1px solid rgba(56, 189, 248, 0.25)',
+              borderRadius: 'var(--radius-sm)',
+              padding: 'var(--sp-4)',
+              marginBottom: 'var(--sp-5)',
+              textAlign: 'left',
+            }}>
+              <p style={{ fontSize: '13px', color: '#cbd5e1', marginBottom: '10px', lineHeight: 1.4 }}>
+                ⚡ <strong>Direct Access:</strong> If your mail delivery is delayed or blocked, you can use the direct reset link below:
+              </p>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <a
+                  href={resetUrl}
+                  className="btn btn-primary btn-sm"
+                  style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  Reset Password Now
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(resetUrl);
+                    toast.success('Copied!', 'Reset URL copied to clipboard');
+                  }}
+                  className="btn btn-secondary btn-sm"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Copy size={13} /> Copy Reset Link
+                </button>
+              </div>
+            </div>
+          )}
+
+          <Link href="/auth/login" className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>
             Return to Sign in
           </Link>
         </div>

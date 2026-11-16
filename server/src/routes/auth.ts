@@ -307,9 +307,20 @@ authRouter.post('/forgot-password', async (req, res, next) => {
       data: { resetToken, resetTokenExpires },
     });
 
-    await sendPasswordResetEmail(user.email, resetToken);
+    const resetUrl = `${getFrontendUrl(req)}/auth/reset-password?token=${resetToken}`;
 
-    res.json({ status: 'success', message: 'If an account with that email exists, we sent a password reset link.' });
+    // Dispatch email asynchronously so SMTP timeout on cloud hosts never hangs HTTP response
+    sendPasswordResetEmail(user.email, resetToken).catch(err => {
+      console.warn('[Email Warning] Password reset email dispatch failed:', err);
+    });
+
+    res.json({
+      status: 'success',
+      message: 'If an account with that email exists, we sent a password reset link.',
+      data: {
+        resetUrl,
+      },
+    });
   } catch (error) {
     next(error);
   }

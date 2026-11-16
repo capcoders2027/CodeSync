@@ -97,7 +97,7 @@ export default function ProjectSettings({ params }: { params: Promise<{ id: stri
 
       const data = await res.json();
       if (res.ok) {
-        const inviteUrl = `${window.location.origin}/projects/${id}`;
+        const inviteUrl = data.data?.inviteUrl || `${window.location.origin}/projects/${id}`;
         navigator.clipboard.writeText(inviteUrl).catch(() => {});
         toast.success('Invitation sent & link copied!', `${inviteEmail} invited as ${inviteRole}. Direct invite link copied to clipboard.`);
         setInviteEmail('');

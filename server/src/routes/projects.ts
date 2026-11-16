@@ -5,6 +5,7 @@ import { AppError } from '../middleware/error';
 import { requireAuth } from '../middleware/auth';
 import { requireProjectRole, getDefaultPermissions } from '../middleware/role';
 import { sendProjectInvitationEmail } from '../utils/email';
+import { env } from '../config/env';
 
 export const projectsRouter = Router();
 
@@ -399,6 +400,10 @@ projectsRouter.post('/:projectId/members', requireProjectRole(['team_lead']), as
       select: { displayName: true, email: true },
     });
 
+    const targetUrl = isNewUser
+      ? `${env.FRONTEND_URL}/auth/register?email=${encodeURIComponent(email)}`
+      : `${env.FRONTEND_URL}/projects/${projectId}`;
+
     sendProjectInvitationEmail({
       email,
       projectName: project?.name || 'Project',
@@ -412,7 +417,11 @@ projectsRouter.post('/:projectId/members', requireProjectRole(['team_lead']), as
       isNewUser,
     }).catch(err => console.error('[Invite Email Error]', err));
 
-    res.status(201).json({ status: 'success', data: { member }, message: 'Invitation sent' });
+    res.status(201).json({
+      status: 'success',
+      data: { member, inviteUrl: targetUrl },
+      message: 'Invitation sent',
+    });
   } catch (error) {
     next(error);
   }
