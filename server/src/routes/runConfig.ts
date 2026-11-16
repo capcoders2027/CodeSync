@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import path from 'path';
 import { z } from 'zod';
 import { prisma } from '../db';
 import { AppError } from '../middleware/error';
@@ -166,6 +167,22 @@ runConfigRouter.post('/run', async (req, res, next) => {
       throw new AppError(400, 'Could not determine entry file. Please configure a run command.', 'NO_ENTRY_FILE');
     }
 
+    // Compute clean active command to display and persist (replace any placeholder 'echo No entry point configured')
+    const baseEntry = path.basename(entryFileName);
+    const activeCommand = (!config.entryCommand || config.entryCommand.includes('No entry point configured'))
+      ? (project.language === 'python' ? `python ${baseEntry}` : (project.language === 'java' ? `java ${baseEntry}` : `node ${baseEntry}`))
+      : config.entryCommand;
+
+    if (config.entryCommand && config.entryCommand.includes('No entry point configured')) {
+      prisma.runConfiguration.update({
+        where: { id: config.id },
+        data: {
+          entryCommand: activeCommand,
+          projectType: config.projectType === 'custom' ? (project.language || 'python') : config.projectType,
+        },
+      }).catch(() => {});
+    }
+
     // Execute
     const startTime = Date.now();
     let result;
@@ -204,8 +221,8 @@ runConfigRouter.post('/run', async (req, res, next) => {
         log: executionLog,
         fullStdout: result.stdout,
         fullStderr: result.stderr,
-        command: config.entryCommand,
-        projectType: config.projectType,
+        command: activeCommand,
+        projectType: config.projectType === 'custom' ? (project.language || 'python') : config.projectType,
       },
     });
   } catch (error) {

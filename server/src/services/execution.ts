@@ -40,12 +40,25 @@ const getRunCommand = (language: string, entryFile: string): string => {
  * Direct process execution on the host machine.
  * Detects long-running web servers (Flask, Express, FastAPI) and captures startup status.
  */
-function runDirectProcess(
+async function runDirectProcess(
   language: string,
   targetDir: string,
   targetFile: string,
-  startTime: number
+  startTime: number,
+  isRetry = false
 ): Promise<ExecutionResult> {
+  // Pre-install requirements.txt if present before execution
+  if (language === 'python' && !isRetry) {
+    try {
+      const reqPath = path.join(targetDir, 'requirements.txt');
+      await fs.access(reqPath);
+      const pipCmd = process.platform === 'win32'
+        ? 'python -m pip install -r requirements.txt'
+        : 'python3 -m pip install -r requirements.txt';
+      await execAsync(pipCmd, { cwd: targetDir, timeout: 25000 }).catch(() => {});
+    } catch {}
+  }
+
   return new Promise((resolve) => {
     let cmd = language === 'python'
       ? (process.platform === 'win32' ? 'python' : 'python3')
@@ -130,8 +143,29 @@ function runDirectProcess(
       });
     });
 
-    child.on('close', (code) => {
+    child.on('close', async (code) => {
       let finalStderr = stderr;
+
+      // Auto-install missing Python dependency (e.g. flask, requests) on Render / Linux host and retry
+      if (!isRetry && language === 'python' && code !== 0 && finalStderr.includes('ModuleNotFoundError: No module named')) {
+        const match = finalStderr.match(/No module named ['"]([^'"]+)['"]/);
+        if (match && match[1]) {
+          const missingPkg = match[1].trim();
+          console.log(`[Exec] Auto-installing missing Python dependency: ${missingPkg}`);
+          try {
+            const pipCmd = process.platform === 'win32'
+              ? `python -m pip install ${missingPkg}`
+              : `python3 -m pip install ${missingPkg}`;
+            await execAsync(pipCmd, { timeout: 30000 });
+            console.log(`[Exec] ${missingPkg} installed successfully. Retrying execution...`);
+            const retryResult = await runDirectProcess(language, targetDir, targetFile, startTime, true);
+            return resolve(retryResult);
+          } catch (pipErr: any) {
+            console.error(`[Exec] Pip install of ${missingPkg} failed:`, pipErr.message);
+          }
+        }
+      }
+
       if (finalStderr.includes('EOFError') || finalStderr.includes('EOF when reading a line')) {
         finalStderr += `\n\n💡 [Interactive CLI Application Detected]\nThis program uses input() to request interactive keyboard input.\nBecause "Run Project" executes headlessly without a terminal TTY, it encountered EOF.\n👉 Open the TERMINAL tab below (or press Ctrl+\`) and run: python ${targetFile}`;
       }
