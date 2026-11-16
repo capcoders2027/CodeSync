@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '../../../../contexts/ToastContext';
 import { useTheme } from '../../../../contexts/ThemeContext';
 import { useAuth } from '../../../../contexts/AuthContext';
+import { getApiBase } from '../../../../lib/apiBase';
 import Link from 'next/link';
 import {
   ArrowLeft, Users, Trash2, Crown, UserPlus, Settings, Code2,
@@ -64,7 +65,7 @@ export default function ProjectSettings({ params }: { params: Promise<{ id: stri
 
   const fetchProject = async () => {
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       const res = await fetch(`${apiBase}/projects/${id}`, { headers });
       if (res.ok) {
         const data = await res.json();
@@ -80,7 +81,7 @@ export default function ProjectSettings({ params }: { params: Promise<{ id: stri
     setInviting(true);
 
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       const res = await fetch(`${apiBase}/projects/${id}/members`, {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
@@ -111,7 +112,7 @@ export default function ProjectSettings({ params }: { params: Promise<{ id: stri
 
   const handleUpdateRole = async (userId: string, newRole: string) => {
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       const res = await fetch(`${apiBase}/projects/${id}/members/${userId}`, {
         method: 'PATCH',
         headers: { ...headers, 'Content-Type': 'application/json' },
@@ -132,7 +133,7 @@ export default function ProjectSettings({ params }: { params: Promise<{ id: stri
   const handleRemoveMember = async (userId: string, displayName: string) => {
     if (!confirm(`Remove ${displayName} from this project?`)) return;
 
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/projects/${id}/members/${userId}`, {
+    const res = await fetch(`${getApiBase()}/projects/${id}/members/${userId}`, {
       method: 'DELETE',
       headers,
     });
@@ -150,7 +151,7 @@ export default function ProjectSettings({ params }: { params: Promise<{ id: stri
     const nextState = !user?.twoFactorEnabled;
 
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       const res = await fetch(`${apiBase}/auth/2fa/toggle`, {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
@@ -186,7 +187,7 @@ export default function ProjectSettings({ params }: { params: Promise<{ id: stri
 
     setIsDeleting(true);
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       const res = await fetch(`${apiBase}/projects/${id}`, {
         method: 'DELETE',
         headers,

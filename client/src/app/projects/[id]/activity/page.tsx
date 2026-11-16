@@ -3,6 +3,7 @@
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { useTheme } from '../../../../contexts/ThemeContext';
+import { getApiBase } from '../../../../lib/apiBase';
 import {
   ArrowLeft, Activity, Code2, Clock, User, Play,
   ShieldCheck, UserPlus, FileCode, GitBranch, Edit3,
@@ -65,7 +66,7 @@ export default function ActivityPage({ params }: { params: Promise<{ id: string 
   const fetchActivity = async () => {
     try {
       const token = localStorage.getItem('accessToken');
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       const headers = { Authorization: `Bearer ${token}` };
 
       // Try history first, fallback to activity

@@ -6,6 +6,7 @@ import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { Wifi, WifiOff, Loader, Users, Image as ImageIcon } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+import { getApiBase, getWsBase } from '../lib/apiBase';
 
 interface EditorProps {
   projectId: string;
@@ -36,7 +37,7 @@ export function Editor({ projectId, fileId, fileName }: EditorProps) {
     if (isImageFile) {
       setImageLoading(true);
       const token = localStorage.getItem('accessToken');
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       fetch(`${apiBase}/projects/${projectId}/files/${fileId}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -96,8 +97,7 @@ export function Editor({ projectId, fileId, fileName }: EditorProps) {
     currentFileIdRef.current = fId;
 
     const token = localStorage.getItem('accessToken');
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-    const wsBase = apiBase.replace(/^http/, 'ws').replace(/\/api$/, '');
+    const wsBase = getWsBase();
     const provider = new WebsocketProvider(
       `${wsBase}/api/ws/projects/${projectId}/files/${fId}`,
       `project:${projectId}:file:${fId}`,

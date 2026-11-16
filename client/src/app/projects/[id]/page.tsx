@@ -12,6 +12,7 @@ import { RunOutputPanel, RunState } from '../../../components/RunOutputPanel';
 import { RunConfigModal } from '../../../components/RunConfigModal';
 import { StatusBar } from '../../../components/StatusBar';
 import { CommandPalette } from '../../../components/CommandPalette';
+import { getApiBase } from '../../../lib/apiBase';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import {
@@ -267,7 +268,7 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
 
   const fetchProject = async () => {
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       const res = await fetch(`${apiBase}/projects/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -282,7 +283,7 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
 
   const fetchRunConfig = async () => {
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       const res = await fetch(`${apiBase}/projects/${id}/run-config`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -299,7 +300,7 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
 
   const fetchCollaborators = async () => {
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       const res = await fetch(`${apiBase}/projects/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -330,7 +331,7 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
     setRunOutput(null);
 
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       const res = await fetch(`${apiBase}/projects/${id}/run-config/run`, {
         method: 'POST',
         headers: {
@@ -394,7 +395,7 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
     toast.info('Analysis started', 'Running SonarQube & defect analysis...');
 
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       const res = await fetch(`${apiBase}/projects/${id}/analyze`, {
         method: 'POST',
         headers: {

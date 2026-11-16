@@ -6,6 +6,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
 import { useTheme } from '../contexts/ThemeContext';
+import { getApiBase, getWsBase } from '../lib/apiBase';
 
 const DARK_THEME = {
   background: '#0d1117',
@@ -67,6 +68,7 @@ export function Terminal({ visible, projectId }: TerminalProps) {
   const fitRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
+  const [activePort, setActivePort] = useState<number | null>(null);
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -74,9 +76,7 @@ export function Terminal({ visible, projectId }: TerminalProps) {
     const token = localStorage.getItem('accessToken');
     if (!token) return;
 
-    // Derive WS URL from the API URL env var (http->ws, https->wss)
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-    const wsBase = apiBase.replace(/^http/, 'ws').replace(/\/api$/, '');
+    const wsBase = getWsBase();
     const ws = new WebSocket(`${wsBase}/ws/terminal?token=${token}&projectId=${projectId || ''}`);
     wsRef.current = ws;
 
@@ -97,9 +97,14 @@ export function Terminal({ visible, projectId }: TerminalProps) {
         const msg = JSON.parse(event.data);
         if (msg.type === 'output' && termRef.current) {
           termRef.current.write(msg.data);
+          const match = msg.data.match(/(?:127\.0\.0\.1|localhost|0\.0\.0\.0):(\d{4,5})/);
+          if (match) {
+            setActivePort(parseInt(match[1], 10));
+          }
         } else if (msg.type === 'exit') {
           termRef.current?.writeln(`\r\n\x1b[90mProcess exited with code ${msg.exitCode}\x1b[0m`);
           setConnected(false);
+          setActivePort(null);
         }
       } catch {
         // Raw data
@@ -207,6 +212,45 @@ export function Terminal({ visible, projectId }: TerminalProps) {
       backgroundColor: '#0d1117',
       position: 'relative',
     }}>
+      {/* Web App Preview Link Banner */}
+      {activePort && (
+        <div style={{
+          position: 'absolute',
+          top: 6,
+          left: 12,
+          zIndex: 10,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          background: 'rgba(16, 185, 129, 0.15)',
+          border: '1px solid rgba(16, 185, 129, 0.4)',
+          borderRadius: 4,
+          padding: '2px 8px',
+        }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#10b981' }} />
+          <span style={{ color: '#10b981', fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+            Port {activePort} Active
+          </span>
+          <a
+            href={`${getApiBase()}/preview/${activePort}/`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              background: '#10b981',
+              color: '#0f172a',
+              padding: '1px 6px',
+              borderRadius: 3,
+              fontSize: 10,
+              fontWeight: 700,
+              textDecoration: 'none',
+              marginLeft: 4,
+            }}
+          >
+            Open Web Preview ↗
+          </a>
+        </div>
+      )}
+
       {/* Terminal Reconnect banner if disconnected */}
       {!connected && (
         <div style={{

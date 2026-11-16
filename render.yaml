@@ -33,6 +33,16 @@ services:
         value: https://code-sync-six-tau.vercel.app
       - key: ML_WORKER_URL
         value: https://codesync-ml.onrender.com
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_USER
+        value: capcoders2027@gmail.com
+      - key: SMTP_PASS
+        value: hghl gejj towg sgfm
+      - key: EMAIL_FROM
+        value: capcoders2027@gmail.com
 
   # ─── 2. ML Worker (FastAPI Python Defect-Risk Predictor) ─────────────
   - type: web

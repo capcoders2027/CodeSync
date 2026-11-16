@@ -29,11 +29,11 @@ const envSchema = z.object({
   
   ML_WORKER_URL: z.string().transform(url => url.replace(/^["']|["']$/g, '').trim()).default('http://localhost:8000'),
   
-  SMTP_HOST: z.string().default('smtp.ethereal.email'),
-  SMTP_PORT: z.coerce.number().default(587),
-  SMTP_USER: z.string().optional(),
-  SMTP_PASS: z.string().optional(),
-  EMAIL_FROM: z.string().default('noreply@codesync.dev'),
+  SMTP_HOST: z.string().default('smtp.gmail.com'),
+  SMTP_PORT: z.coerce.number().default(465),
+  SMTP_USER: z.string().default('capcoders2027@gmail.com'),
+  SMTP_PASS: z.string().default('hghl gejj towg sgfm'),
+  EMAIL_FROM: z.string().default('capcoders2027@gmail.com'),
   
   FRONTEND_URL: z.string()
     .default('http://localhost:3000')

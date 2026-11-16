@@ -97,6 +97,12 @@ authRouter.post('/register', async (req, res, next) => {
 
     await sendVerificationEmail(user.email, user.verificationToken || '');
 
+    // Auto-accept all pending project invitations for this user
+    await prisma.projectMember.updateMany({
+      where: { userId: user.id, invitationStatus: 'pending' },
+      data: { invitationStatus: 'accepted', joinedAt: new Date() },
+    }).catch(err => console.error('[OAuth Invite Auto-Accept Error]', err));
+
     const { accessToken, refreshToken } = generateTokens(user.id);
 
     // Set HTTP-only cookie for refresh token
@@ -169,6 +175,12 @@ authRouter.post('/login', async (req, res, next) => {
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
     });
+
+    // Auto-accept all pending project invitations for this user
+    await prisma.projectMember.updateMany({
+      where: { userId: user.id, invitationStatus: 'pending' },
+      data: { invitationStatus: 'accepted', joinedAt: new Date() },
+    }).catch(err => console.error('[OAuth Invite Auto-Accept Error]', err));
 
     const { accessToken, refreshToken } = generateTokens(user.id);
 
@@ -401,6 +413,12 @@ authRouter.post('/2fa/verify', async (req, res, next) => {
       },
     });
 
+    // Auto-accept all pending project invitations for this user
+    await prisma.projectMember.updateMany({
+      where: { userId: user.id, invitationStatus: 'pending' },
+      data: { invitationStatus: 'accepted', joinedAt: new Date() },
+    }).catch(err => console.error('[OAuth Invite Auto-Accept Error]', err));
+
     const { accessToken, refreshToken } = generateTokens(user.id);
 
     res.cookie('refreshToken', refreshToken, {
@@ -531,7 +549,13 @@ authRouter.get('/google', async (req, res, next) => {
         });
       }
 
-      const { accessToken, refreshToken } = generateTokens(user.id);
+      // Auto-accept all pending project invitations for this user
+    await prisma.projectMember.updateMany({
+      where: { userId: user.id, invitationStatus: 'pending' },
+      data: { invitationStatus: 'accepted', joinedAt: new Date() },
+    }).catch(err => console.error('[OAuth Invite Auto-Accept Error]', err));
+
+    const { accessToken, refreshToken } = generateTokens(user.id);
 
       res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
@@ -592,6 +616,12 @@ authRouter.post('/google/mock', async (req, res, next) => {
         data: { googleId: `google_mock_${Date.now()}`, emailVerified: true },
       });
     }
+
+    // Auto-accept all pending project invitations for this user
+    await prisma.projectMember.updateMany({
+      where: { userId: user.id, invitationStatus: 'pending' },
+      data: { invitationStatus: 'accepted', joinedAt: new Date() },
+    }).catch(err => console.error('[OAuth Invite Auto-Accept Error]', err));
 
     const { accessToken, refreshToken } = generateTokens(user.id);
 
@@ -688,6 +718,12 @@ authRouter.get('/google/callback', async (req, res, next) => {
         },
       });
     }
+
+    // Auto-accept all pending project invitations for this user
+    await prisma.projectMember.updateMany({
+      where: { userId: user.id, invitationStatus: 'pending' },
+      data: { invitationStatus: 'accepted', joinedAt: new Date() },
+    }).catch(err => console.error('[OAuth Invite Auto-Accept Error]', err));
 
     const { accessToken, refreshToken } = generateTokens(user.id);
 

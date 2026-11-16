@@ -4,6 +4,7 @@ import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { useToast } from '../../../../contexts/ToastContext';
 import { useTheme } from '../../../../contexts/ThemeContext';
+import { getApiBase } from '../../../../lib/apiBase';
 import {
   ArrowLeft, History, Code2, GitBranch, Clock, User,
   Tag, ChevronRight, FileCode, Plus, Minus, Loader,
@@ -34,7 +35,7 @@ export default function VersionsPage({ params }: { params: Promise<{ id: string 
   const fetchVersions = async () => {
     try {
       const token = localStorage.getItem('accessToken');
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       const res = await fetch(`${apiBase}/projects/${id}/versions`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -57,7 +58,7 @@ export default function VersionsPage({ params }: { params: Promise<{ id: string 
     setRestoringId(version.id);
     try {
       const token = localStorage.getItem('accessToken');
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       const res = await fetch(`${apiBase}/projects/${id}/versions/${version.id}/restore`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },

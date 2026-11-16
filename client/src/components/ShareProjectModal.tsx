@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useToast } from '../contexts/ToastContext';
+import { getApiBase } from '../lib/apiBase';
 import { X, Copy, Check, UserPlus, Link as LinkIcon, Loader, Shield, Users } from 'lucide-react';
 
 interface ShareProjectModalProps {
@@ -46,7 +47,7 @@ export function ShareProjectModal({ projectId, projectName, onClose, onSuccess }
     setLoading(true);
     try {
       const token = localStorage.getItem('accessToken');
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
 
       const res = await fetch(`${apiBase}/projects/${projectId}/members`, {
         method: 'POST',

@@ -3,6 +3,7 @@
 import { useState, useEffect, use } from 'react';
 import { useToast } from '../../../../contexts/ToastContext';
 import { useTheme } from '../../../../contexts/ThemeContext';
+import { getApiBase } from '../../../../lib/apiBase';
 import Link from 'next/link';
 import {
   ArrowLeft, ShieldCheck, AlertTriangle, Bug, Brain, TrendingUp,
@@ -72,7 +73,7 @@ export default function AnalysisDashboard({ params }: { params: Promise<{ id: st
   const fetchData = async () => {
     try {
       const headers = getHeaders();
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       const [analysisRes, predictRes] = await Promise.all([
         fetch(`${apiBase}/projects/${id}/analyze`, { headers }),
         fetch(`${apiBase}/projects/${id}/predict`, { headers }),
@@ -97,7 +98,7 @@ export default function AnalysisDashboard({ params }: { params: Promise<{ id: st
   const loadSmells = async (analysisId: string) => {
     setSelectedAnalysis(analysisId);
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       const res = await fetch(`${apiBase}/projects/${id}/analyze/${analysisId}/smells`, { headers: getHeaders() });
       if (res.ok) {
         const data = await res.json();
@@ -109,7 +110,7 @@ export default function AnalysisDashboard({ params }: { params: Promise<{ id: st
   const handleRunAnalysis = async () => {
     setAnalyzing(true);
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       const res = await fetch(`${apiBase}/projects/${id}/analyze`, {
         method: 'POST',
         headers: { ...getHeaders(), 'Content-Type': 'application/json' }
@@ -131,7 +132,7 @@ export default function AnalysisDashboard({ params }: { params: Promise<{ id: st
   const handlePredict = async () => {
     setPredicting(true);
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       const res = await fetch(`${apiBase}/projects/${id}/predict`, {
         method: 'POST',
         headers: { ...getHeaders(), 'Content-Type': 'application/json' }

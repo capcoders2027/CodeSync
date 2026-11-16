@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useToast } from '../contexts/ToastContext';
+import { getApiBase } from '../lib/apiBase';
 import { X, Settings, Loader, Zap, CheckCircle } from 'lucide-react';
 
 interface RunConfigModalProps {
@@ -42,7 +43,7 @@ export function RunConfigModal({ projectId, onClose, onSaved }: RunConfigModalPr
   const fetchConfig = async () => {
     try {
       const token = localStorage.getItem('accessToken');
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       const res = await fetch(`${apiBase}/projects/${projectId}/run-config`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -72,7 +73,7 @@ export function RunConfigModal({ projectId, onClose, onSaved }: RunConfigModalPr
     setSaving(true);
     try {
       const token = localStorage.getItem('accessToken');
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       const res = await fetch(`${apiBase}/projects/${projectId}/run-config`, {
         method: 'PUT',
         headers: {

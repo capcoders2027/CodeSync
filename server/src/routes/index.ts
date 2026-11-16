@@ -8,6 +8,7 @@ import { executionRouter } from './execution';
 import { analysisRouter } from './analysis';
 import { predictRouter } from './predict';
 import { runConfigRouter } from './runConfig';
+import { previewRouter } from './preview';
 
 export const apiRouter = Router();
 
@@ -19,3 +20,4 @@ apiRouter.use('/projects/:projectId/execute', executionRouter);
 apiRouter.use('/projects/:projectId/analyze', analysisRouter);
 apiRouter.use('/projects/:projectId/predict', predictRouter);
 apiRouter.use('/projects/:projectId/run-config', runConfigRouter);
+apiRouter.use('/preview', previewRouter);

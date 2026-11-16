@@ -3,8 +3,9 @@
 import React from 'react';
 import {
   X, Play, Square, Loader, CheckCircle, XCircle, Clock,
-  AlertTriangle, Settings, ChevronDown, TerminalSquare
+  AlertTriangle, Settings, ChevronDown, TerminalSquare, ExternalLink, Globe
 } from 'lucide-react';
+import { getApiBase } from '../lib/apiBase';
 
 export type RunState = 'idle' | 'preparing' | 'building' | 'running' | 'completed' | 'failed' | 'stopped';
 
@@ -49,6 +50,8 @@ export function RunOutputPanel({
   runState, runOutput, runConfig, projectName, onClose, onStop, onConfigOpen, onSwitchToTerminal,
 }: RunOutputPanelProps) {
   const stateInfo = STATE_CONFIG[runState];
+  const portMatch = (runOutput?.stdout || '').match(/(?:127\.0\.0\.1|localhost|0\.0\.0\.0):(\d{4,5})/) || (runOutput?.stderr || '').match(/(?:127\.0\.0\.1|localhost|0\.0\.0\.0):(\d{4,5})/);
+  const webPort = portMatch ? parseInt(portMatch[1], 10) : null;
   const isInteractive = Boolean(
     runOutput?.stderr && (
       runOutput.stderr.includes('EOFError') ||
@@ -192,6 +195,53 @@ export function RunOutputPanel({
                 >
                   <TerminalSquare size={13} /> Open in Terminal
                 </button>
+              </div>
+            )}
+
+            {/* Web App Preview Link */}
+            {webPort && (
+              <div style={{
+                marginTop: 'var(--sp-4)',
+                padding: 'var(--sp-4) var(--sp-5)',
+                backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                border: '1px solid #10b981',
+                borderRadius: 'var(--radius-sm)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 'var(--sp-4)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Globe size={18} style={{ color: '#10b981', flexShrink: 0 }} />
+                  <div>
+                    <div style={{ color: '#10b981', fontWeight: 600, fontSize: 'var(--text-sm)', marginBottom: '2px' }}>
+                      Web Application Running on Port {webPort}
+                    </div>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-xs)' }}>
+                      Accessible to you and all collaborators through the cloud preview proxy.
+                    </div>
+                  </div>
+                </div>
+                <a
+                  href={`${getApiBase()}/preview/${webPort}/`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-sm"
+                  style={{
+                    backgroundColor: '#10b981',
+                    color: '#0f172a',
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    textDecoration: 'none',
+                    padding: '6px 12px',
+                    borderRadius: 4,
+                  }}
+                >
+                  <ExternalLink size={13} /> Open Live Preview
+                </a>
               </div>
             )}
 

@@ -8,6 +8,7 @@ import { CreateProjectModal } from '../components/CreateProjectModal';
 import { ShareProjectModal } from '../components/ShareProjectModal';
 import Link from 'next/link';
 import { apiGet } from '../lib/api';
+import { getApiBase } from '../lib/apiBase';
 import {
   Plus, FolderCode, Users, Clock, Code2, ArrowRight, LogOut,
   LayoutDashboard, Search, ChevronRight, Activity, ShieldCheck,
@@ -122,7 +123,7 @@ export default function Home() {
     setDeletingId(projectId);
     try {
       const token = localStorage.getItem('accessToken');
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       const res = await fetch(`${apiBase}/projects/${projectId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },

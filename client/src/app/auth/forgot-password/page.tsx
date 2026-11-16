@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Mail, CheckCircle, AlertCircle } from 'lucide-react';
 import { useToast } from '../../../contexts/ToastContext';
+import { getApiBase } from '../../../lib/apiBase';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -12,7 +13,7 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState('');
   const toast = useToast();
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+  const API_URL = getApiBase();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

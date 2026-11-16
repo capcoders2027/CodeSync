@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 import { useTabs } from '../contexts/TabsContext';
+import { getApiBase } from '../lib/apiBase';
 
 interface FileNode {
   id: string;
@@ -70,7 +71,7 @@ export function FileTree({ projectId, onSelectFile, activeFileId, width = 250 }:
     setLoading(true);
     try {
       const token = localStorage.getItem('accessToken');
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       const res = await fetch(`${apiBase}/projects/${projectId}/files`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -96,7 +97,7 @@ export function FileTree({ projectId, onSelectFile, activeFileId, width = 250 }:
 
     try {
       const token = localStorage.getItem('accessToken');
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
       const res = await fetch(`${apiBase}/projects/${projectId}/files`, {
         method: 'POST',
         headers: {
@@ -154,7 +155,7 @@ export function FileTree({ projectId, onSelectFile, activeFileId, width = 250 }:
     const idsToClose = collectDescendantIds(fileId);
 
     const token = localStorage.getItem('accessToken');
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    const apiBase = getApiBase();
     const res = await fetch(`${apiBase}/projects/${projectId}/files/${fileId}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` }
@@ -223,7 +224,7 @@ export function FileTree({ projectId, onSelectFile, activeFileId, width = 250 }:
       formData.append('paths', JSON.stringify(paths));
 
       const token = localStorage.getItem('accessToken');
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const apiBase = getApiBase();
 
       const res = await fetch(`${apiBase}/projects/${projectId}/files/upload`, {
         method: 'POST',
