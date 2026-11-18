@@ -43,3 +43,17 @@ yarn-error.log*
 .idea/
 .DS_Store
 Thumbs.db
+
+# Agent & AI instruction files
+AGENTS.md
+CLAUDE.md
+*/AGENTS.md
+*/CLAUDE.md
+
+# Reports & Binary Archives
+*.docx
+*.pdf
+*.rar
+report_build/
+Paper_Final/
+Prompts/
